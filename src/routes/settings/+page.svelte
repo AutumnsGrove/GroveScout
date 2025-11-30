@@ -1,8 +1,15 @@
 <script lang="ts">
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+
 	let { data } = $props();
 
 	let isLoadingPortal = $state(false);
+	let isExporting = $state(false);
+	let isDeleting = $state(false);
+	let showDeleteConfirm = $state(false);
+	let deleteConfirmText = $state('');
 	let error = $state<string | null>(null);
+	let success = $state<string | null>(null);
 
 	interface ApiResponse {
 		success?: boolean;
@@ -35,6 +42,62 @@
 		}
 	}
 
+	async function exportData() {
+		isExporting = true;
+		error = null;
+
+		try {
+			const response = await fetch('/api/account');
+
+			if (!response.ok) {
+				const result: ApiResponse = await response.json();
+				throw new Error(result.error?.message || 'Failed to export data');
+			}
+
+			// Download the file
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `scout-data-export.json`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+
+			success = 'Data exported successfully!';
+			setTimeout(() => (success = null), 3000);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Something went wrong';
+		} finally {
+			isExporting = false;
+		}
+	}
+
+	async function deleteAccount() {
+		if (deleteConfirmText !== 'DELETE') return;
+
+		isDeleting = true;
+		error = null;
+
+		try {
+			const response = await fetch('/api/account', {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const result: ApiResponse = await response.json();
+				throw new Error(result.error?.message || 'Failed to delete account');
+			}
+
+			// Redirect to home after deletion
+			window.location.href = '/?deleted=true';
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Something went wrong';
+			isDeleting = false;
+		}
+	}
+
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
 			year: 'numeric',
@@ -49,6 +112,10 @@
 
 	{#if error}
 		<div class="alert error">{error}</div>
+	{/if}
+
+	{#if success}
+		<div class="alert success">{success}</div>
 	{/if}
 
 	<section class="settings-section">
@@ -99,15 +166,69 @@
 	</section>
 
 	<section class="settings-section">
+		<h2>Appearance</h2>
+		<ThemeToggle />
+	</section>
+
+	<section class="settings-section">
 		<h2>Preferences</h2>
 		<a href="/profile" class="btn-secondary">Edit Profile Preferences</a>
 	</section>
 
+	<section class="settings-section">
+		<h2>Data & Privacy</h2>
+		<p class="section-description">Export or delete your account data.</p>
+		<div class="action-buttons">
+			<button class="btn-secondary" onclick={exportData} disabled={isExporting}>
+				{isExporting ? 'Exporting...' : 'Export My Data'}
+			</button>
+		</div>
+	</section>
+
 	<section class="settings-section danger-zone">
-		<h2>Account Actions</h2>
-		<a href="/auth/logout" class="btn-danger">Sign Out</a>
+		<h2>Danger Zone</h2>
+		<div class="action-buttons">
+			<a href="/auth/logout" class="btn-secondary">Sign Out</a>
+			<button class="btn-danger" onclick={() => (showDeleteConfirm = true)}>
+				Delete Account
+			</button>
+		</div>
 	</section>
 </div>
+
+{#if showDeleteConfirm}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" onclick={() => (showDeleteConfirm = false)}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="modal" onclick={(e) => e.stopPropagation()}>
+			<h2>Delete Account</h2>
+			<p class="modal-warning">
+				This action is <strong>permanent</strong> and cannot be undone. All your data including searches, credits, and preferences will be permanently deleted.
+			</p>
+			<p class="modal-instruction">
+				Type <strong>DELETE</strong> to confirm:
+			</p>
+			<input
+				type="text"
+				class="input"
+				bind:value={deleteConfirmText}
+				placeholder="Type DELETE"
+			/>
+			<div class="modal-actions">
+				<button class="btn-secondary" onclick={() => (showDeleteConfirm = false)}>
+					Cancel
+				</button>
+				<button
+					class="btn-danger"
+					onclick={deleteAccount}
+					disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+				>
+					{isDeleting ? 'Deleting...' : 'Delete My Account'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.settings-page {
@@ -126,21 +247,21 @@
 	}
 
 	.alert.error {
-		background: #fef2f2;
-		color: #991b1b;
+		background: var(--color-error-light);
+		color: var(--color-error);
 	}
 
 	.settings-section {
-		background: white;
-		border: 1px solid #e5e7eb;
-		border-radius: 0.75rem;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
 		padding: 1.5rem;
 		margin-bottom: 1.5rem;
 	}
 
 	.settings-section h2 {
 		font-size: 1rem;
-		color: #6b7280;
+		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		margin-bottom: 1rem;
@@ -153,17 +274,17 @@
 	}
 
 	.setting-label {
-		color: #374151;
+		color: var(--color-text);
 		font-weight: 500;
 	}
 
 	.setting-value {
-		color: #6b7280;
+		color: var(--color-text-secondary);
 	}
 
 	.subscription-card {
-		background: #f9fafb;
-		border-radius: 0.5rem;
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-lg);
 		padding: 1rem;
 	}
 
@@ -181,29 +302,29 @@
 
 	.status {
 		padding: 0.125rem 0.5rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-sm);
 		font-size: 0.75rem;
 		font-weight: 500;
 		text-transform: uppercase;
 	}
 
 	.status-active {
-		background: #d1fae5;
-		color: #065f46;
+		background: var(--color-success-light);
+		color: var(--color-success);
 	}
 
 	.status-canceled {
-		background: #fef3c7;
-		color: #92400e;
+		background: var(--color-warning-light);
+		color: var(--color-warning);
 	}
 
 	.status-past_due {
-		background: #fee2e2;
-		color: #991b1b;
+		background: var(--color-error-light);
+		color: var(--color-error);
 	}
 
 	.renewal {
-		color: #6b7280;
+		color: var(--color-text-secondary);
 		font-size: 0.875rem;
 		margin-bottom: 1rem;
 	}
@@ -214,7 +335,7 @@
 	}
 
 	.no-subscription p {
-		color: #6b7280;
+		color: var(--color-text-secondary);
 		margin-bottom: 1rem;
 	}
 
@@ -228,37 +349,37 @@
 	.credit-count {
 		font-size: 2rem;
 		font-weight: 700;
-		color: #6366f1;
+		color: var(--color-primary);
 	}
 
 	.credit-label {
-		color: #6b7280;
+		color: var(--color-text-secondary);
 	}
 
 	.btn-primary {
 		display: inline-block;
-		background: #6366f1;
+		background: var(--color-primary);
 		color: white;
 		padding: 0.625rem 1.25rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		font-weight: 500;
 	}
 
 	.btn-secondary {
 		display: inline-block;
-		background: white;
-		border: 1px solid #e5e7eb;
-		color: #374151;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
 		padding: 0.625rem 1.25rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		font-weight: 500;
 		cursor: pointer;
 	}
 
 	.btn-secondary:hover:not(:disabled) {
-		background: #f9fafb;
+		background: var(--color-bg-secondary);
 	}
 
 	.btn-secondary:disabled {
@@ -267,21 +388,90 @@
 	}
 
 	.danger-zone {
-		border-color: #fecaca;
+		border-color: var(--color-error-light);
 	}
 
 	.btn-danger {
 		display: inline-block;
-		background: white;
-		border: 1px solid #ef4444;
-		color: #ef4444;
+		background: var(--color-bg);
+		border: 1px solid var(--color-error);
+		color: var(--color-error);
 		padding: 0.625rem 1.25rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		font-weight: 500;
 	}
 
-	.btn-danger:hover {
-		background: #fef2f2;
+	.btn-danger:hover:not(:disabled) {
+		background: var(--color-error-light);
+	}
+
+	.btn-danger:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.alert.success {
+		background: var(--color-success-light);
+		color: var(--color-success);
+	}
+
+	.section-description {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+		margin-bottom: 1rem;
+	}
+
+	.action-buttons {
+		display: flex;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	/* Modal */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		padding: 1rem;
+	}
+
+	.modal {
+		background: var(--color-bg);
+		border-radius: var(--radius-xl);
+		padding: 1.5rem;
+		max-width: 400px;
+		width: 100%;
+		box-shadow: var(--shadow-lg);
+	}
+
+	.modal h2 {
+		color: var(--color-error);
+		margin-bottom: 1rem;
+	}
+
+	.modal-warning {
+		color: var(--color-text-secondary);
+		margin-bottom: 1rem;
+		line-height: 1.5;
+	}
+
+	.modal-instruction {
+		color: var(--color-text);
+		margin-bottom: 0.5rem;
+	}
+
+	.modal .input {
+		margin-bottom: 1rem;
+	}
+
+	.modal-actions {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
 	}
 </style>

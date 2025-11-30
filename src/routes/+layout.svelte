@@ -1,5 +1,8 @@
 <script lang="ts">
 	import '../app.css';
+	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 	let { children, data } = $props();
 
@@ -19,12 +22,26 @@
 		mobileMenuOpen = false;
 		userMenuOpen = false;
 	}
+
+	// Register service worker for PWA
+	onMount(() => {
+		if (browser && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js').catch((err) => {
+				console.error('Service worker registration failed:', err);
+			});
+		}
+	});
 </script>
 
 <svelte:head>
 	<title>Scout - Your Personal Deal Hunter</title>
 	<meta name="description" content="AI-powered shopping research that finds the best deals for you." />
 	<link rel="icon" href="/favicon.svg" />
+	<link rel="manifest" href="/manifest.json" />
+	<meta name="theme-color" content="#6366f1" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+	<meta name="apple-mobile-web-app-title" content="Scout" />
 </svelte:head>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -41,6 +58,7 @@
 				{#if data.user}
 					<a href="/dashboard">Dashboard</a>
 					<a href="/search/new" class="btn btn-primary">New Search</a>
+					<ThemeToggle compact />
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div class="user-menu" onclick={(e) => e.stopPropagation()}>
 						<button class="user-trigger" onclick={toggleUserMenu}>
@@ -59,6 +77,7 @@
 						{/if}
 					</div>
 				{:else}
+					<ThemeToggle compact />
 					<a href="/pricing">Pricing</a>
 					<a href="/auth/login" class="btn btn-primary">Get Started</a>
 				{/if}

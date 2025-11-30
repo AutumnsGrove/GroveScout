@@ -695,3 +695,481 @@ export async function updateDailyRevenue(db: D1Database, amountCents: number): P
 		.bind(today, amountCents, amountCents)
 		.run();
 }
+
+// ============================================================================
+// Favorites Operations
+// ============================================================================
+
+export interface Favorite {
+	id: string;
+	user_id: string;
+	search_id: string;
+	note: string | null;
+	created_at: string;
+}
+
+export async function addFavorite(
+	db: D1Database,
+	userId: string,
+	searchId: string,
+	note?: string
+): Promise<Favorite> {
+	const id = generateId();
+	const timestamp = now();
+
+	await db
+		.prepare('INSERT INTO favorites (id, user_id, search_id, note, created_at) VALUES (?, ?, ?, ?, ?)')
+		.bind(id, userId, searchId, note ?? null, timestamp)
+		.run();
+
+	return { id, user_id: userId, search_id: searchId, note: note ?? null, created_at: timestamp };
+}
+
+export async function removeFavorite(db: D1Database, userId: string, searchId: string): Promise<void> {
+	await db.prepare('DELETE FROM favorites WHERE user_id = ? AND search_id = ?').bind(userId, searchId).run();
+}
+
+export async function getFavorites(db: D1Database, userId: string): Promise<(Favorite & { query_freeform: string | null })[]> {
+	const result = await db
+		.prepare(
+			`SELECT f.*, s.query_freeform
+			 FROM favorites f
+			 JOIN searches s ON f.search_id = s.id
+			 WHERE f.user_id = ?
+			 ORDER BY f.created_at DESC`
+		)
+		.bind(userId)
+		.all<Favorite & { query_freeform: string | null }>();
+
+	return result.results ?? [];
+}
+
+export async function isFavorite(db: D1Database, userId: string, searchId: string): Promise<boolean> {
+	const result = await db
+		.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND search_id = ?')
+		.bind(userId, searchId)
+		.first();
+	return !!result;
+}
+
+// ============================================================================
+// Email Preferences Operations
+// ============================================================================
+
+export interface EmailPreferences {
+	id: string;
+	user_id: string;
+	marketing: boolean;
+	search_completed: boolean;
+	search_failed: boolean;
+	weekly_digest: boolean;
+	product_updates: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+export async function getEmailPreferences(db: D1Database, userId: string): Promise<EmailPreferences | null> {
+	const result = await db.prepare('SELECT * FROM email_preferences WHERE user_id = ?').bind(userId).first();
+	if (!result) return null;
+	return {
+		...result,
+		marketing: Boolean(result.marketing),
+		search_completed: Boolean(result.search_completed),
+		search_failed: Boolean(result.search_failed),
+		weekly_digest: Boolean(result.weekly_digest),
+		product_updates: Boolean(result.product_updates)
+	} as EmailPreferences;
+}
+
+export async function upsertEmailPreferences(
+	db: D1Database,
+	userId: string,
+	prefs: Partial<Omit<EmailPreferences, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+): Promise<void> {
+	const timestamp = now();
+	const id = generateId();
+
+	await db
+		.prepare(
+			`INSERT INTO email_preferences (id, user_id, marketing, search_completed, search_failed, weekly_digest, product_updates, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(user_id) DO UPDATE SET
+			   marketing = COALESCE(?, marketing),
+			   search_completed = COALESCE(?, search_completed),
+			   search_failed = COALESCE(?, search_failed),
+			   weekly_digest = COALESCE(?, weekly_digest),
+			   product_updates = COALESCE(?, product_updates),
+			   updated_at = ?`
+		)
+		.bind(
+			id,
+			userId,
+			prefs.marketing !== undefined ? (prefs.marketing ? 1 : 0) : 1,
+			prefs.search_completed !== undefined ? (prefs.search_completed ? 1 : 0) : 1,
+			prefs.search_failed !== undefined ? (prefs.search_failed ? 1 : 0) : 1,
+			prefs.weekly_digest !== undefined ? (prefs.weekly_digest ? 1 : 0) : 0,
+			prefs.product_updates !== undefined ? (prefs.product_updates ? 1 : 0) : 1,
+			timestamp,
+			timestamp,
+			prefs.marketing !== undefined ? (prefs.marketing ? 1 : 0) : null,
+			prefs.search_completed !== undefined ? (prefs.search_completed ? 1 : 0) : null,
+			prefs.search_failed !== undefined ? (prefs.search_failed ? 1 : 0) : null,
+			prefs.weekly_digest !== undefined ? (prefs.weekly_digest ? 1 : 0) : null,
+			prefs.product_updates !== undefined ? (prefs.product_updates ? 1 : 0) : null,
+			timestamp
+		)
+		.run();
+}
+
+// ============================================================================
+// API Keys Operations
+// ============================================================================
+
+export interface ApiKey {
+	id: string;
+	user_id: string;
+	name: string;
+	key_prefix: string;
+	scopes: string[];
+	last_used_at: string | null;
+	expires_at: string | null;
+	created_at: string;
+}
+
+export async function createApiKey(
+	db: D1Database,
+	userId: string,
+	name: string,
+	keyHash: string,
+	keyPrefix: string,
+	scopes: string[] = ['search:read', 'search:create']
+): Promise<ApiKey> {
+	const id = generateId();
+	const timestamp = now();
+
+	await db
+		.prepare(
+			`INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, scopes, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`
+		)
+		.bind(id, userId, name, keyHash, keyPrefix, JSON.stringify(scopes), timestamp)
+		.run();
+
+	return {
+		id,
+		user_id: userId,
+		name,
+		key_prefix: keyPrefix,
+		scopes,
+		last_used_at: null,
+		expires_at: null,
+		created_at: timestamp
+	};
+}
+
+export async function getApiKeys(db: D1Database, userId: string): Promise<ApiKey[]> {
+	const result = await db
+		.prepare('SELECT id, user_id, name, key_prefix, scopes, last_used_at, expires_at, created_at FROM api_keys WHERE user_id = ?')
+		.bind(userId)
+		.all();
+
+	return (result.results ?? []).map((row) => ({
+		...row,
+		scopes: JSON.parse((row as Record<string, unknown>).scopes as string)
+	})) as ApiKey[];
+}
+
+export async function getApiKeyByPrefix(db: D1Database, prefix: string): Promise<{ id: string; user_id: string; key_hash: string; scopes: string[] } | null> {
+	const result = await db
+		.prepare('SELECT id, user_id, key_hash, scopes FROM api_keys WHERE key_prefix = ?')
+		.bind(prefix)
+		.first<{ id: string; user_id: string; key_hash: string; scopes: string }>();
+
+	if (!result) return null;
+	return { ...result, scopes: JSON.parse(result.scopes) };
+}
+
+export async function deleteApiKey(db: D1Database, userId: string, keyId: string): Promise<void> {
+	await db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?').bind(keyId, userId).run();
+}
+
+export async function updateApiKeyLastUsed(db: D1Database, keyId: string): Promise<void> {
+	await db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').bind(now(), keyId).run();
+}
+
+// ============================================================================
+// Webhook Operations
+// ============================================================================
+
+export interface Webhook {
+	id: string;
+	user_id: string;
+	url: string;
+	secret: string;
+	events: string[];
+	active: boolean;
+	failure_count: number;
+	last_triggered_at: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export async function createWebhook(
+	db: D1Database,
+	userId: string,
+	url: string,
+	secret: string,
+	events: string[] = ['search.completed']
+): Promise<Webhook> {
+	const id = generateId();
+	const timestamp = now();
+
+	await db
+		.prepare(
+			`INSERT INTO webhooks (id, user_id, url, secret, events, active, failure_count, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?)`
+		)
+		.bind(id, userId, url, secret, JSON.stringify(events), timestamp, timestamp)
+		.run();
+
+	return {
+		id,
+		user_id: userId,
+		url,
+		secret,
+		events,
+		active: true,
+		failure_count: 0,
+		last_triggered_at: null,
+		created_at: timestamp,
+		updated_at: timestamp
+	};
+}
+
+export async function getWebhooks(db: D1Database, userId: string): Promise<Webhook[]> {
+	const result = await db.prepare('SELECT * FROM webhooks WHERE user_id = ?').bind(userId).all();
+
+	return (result.results ?? []).map((row) => ({
+		...row,
+		events: JSON.parse((row as Record<string, unknown>).events as string),
+		active: Boolean((row as Record<string, unknown>).active)
+	})) as Webhook[];
+}
+
+export async function getWebhooksForEvent(db: D1Database, userId: string, event: string): Promise<Webhook[]> {
+	const webhooks = await getWebhooks(db, userId);
+	return webhooks.filter((w) => w.active && w.events.includes(event));
+}
+
+export async function deleteWebhook(db: D1Database, userId: string, webhookId: string): Promise<void> {
+	await db.prepare('DELETE FROM webhooks WHERE id = ? AND user_id = ?').bind(webhookId, userId).run();
+}
+
+export async function updateWebhookStatus(
+	db: D1Database,
+	webhookId: string,
+	success: boolean
+): Promise<void> {
+	if (success) {
+		await db
+			.prepare('UPDATE webhooks SET last_triggered_at = ?, failure_count = 0 WHERE id = ?')
+			.bind(now(), webhookId)
+			.run();
+	} else {
+		await db
+			.prepare('UPDATE webhooks SET failure_count = failure_count + 1, active = CASE WHEN failure_count >= 4 THEN 0 ELSE active END WHERE id = ?')
+			.bind(webhookId)
+			.run();
+	}
+}
+
+// ============================================================================
+// Referral Operations
+// ============================================================================
+
+export interface ReferralCode {
+	id: string;
+	user_id: string;
+	code: string;
+	uses_count: number;
+	created_at: string;
+}
+
+export interface Referral {
+	id: string;
+	referrer_id: string;
+	referred_id: string;
+	code_used: string;
+	credits_awarded: number;
+	created_at: string;
+}
+
+export async function createReferralCode(db: D1Database, userId: string): Promise<ReferralCode> {
+	const id = generateId();
+	const timestamp = now();
+	const code = generateReferralCode();
+
+	await db
+		.prepare('INSERT INTO referral_codes (id, user_id, code, uses_count, created_at) VALUES (?, ?, ?, 0, ?)')
+		.bind(id, userId, code, timestamp)
+		.run();
+
+	return { id, user_id: userId, code, uses_count: 0, created_at: timestamp };
+}
+
+function generateReferralCode(): string {
+	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+	let code = '';
+	for (let i = 0; i < 8; i++) {
+		code += chars[Math.floor(Math.random() * chars.length)];
+	}
+	return code;
+}
+
+export async function getReferralCode(db: D1Database, userId: string): Promise<ReferralCode | null> {
+	const result = await db.prepare('SELECT * FROM referral_codes WHERE user_id = ?').bind(userId).first<ReferralCode>();
+	return result ?? null;
+}
+
+export async function getReferralCodeByCode(db: D1Database, code: string): Promise<ReferralCode | null> {
+	const result = await db.prepare('SELECT * FROM referral_codes WHERE code = ?').bind(code).first<ReferralCode>();
+	return result ?? null;
+}
+
+export async function applyReferral(
+	db: D1Database,
+	referrerId: string,
+	referredId: string,
+	code: string,
+	creditsAwarded: number
+): Promise<void> {
+	const id = generateId();
+	const timestamp = now();
+
+	// Create referral record
+	await db
+		.prepare('INSERT INTO referrals (id, referrer_id, referred_id, code_used, credits_awarded, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+		.bind(id, referrerId, referredId, code, creditsAwarded, timestamp)
+		.run();
+
+	// Update referral code uses
+	await db.prepare('UPDATE referral_codes SET uses_count = uses_count + 1 WHERE user_id = ?').bind(referrerId).run();
+
+	// Award credits to both users
+	await addCreditEntry(db, {
+		user_id: referrerId,
+		amount: creditsAwarded,
+		reason: 'referral',
+		note: 'Referral bonus - friend signed up'
+	});
+
+	await addCreditEntry(db, {
+		user_id: referredId,
+		amount: creditsAwarded,
+		reason: 'referral',
+		note: 'Referral bonus - used referral code'
+	});
+}
+
+export async function getReferrals(db: D1Database, userId: string): Promise<Referral[]> {
+	const result = await db
+		.prepare('SELECT * FROM referrals WHERE referrer_id = ? ORDER BY created_at DESC')
+		.bind(userId)
+		.all<Referral>();
+	return result.results ?? [];
+}
+
+export async function hasBeenReferred(db: D1Database, userId: string): Promise<boolean> {
+	const result = await db.prepare('SELECT 1 FROM referrals WHERE referred_id = ?').bind(userId).first();
+	return !!result;
+}
+
+// ============================================================================
+// Search Templates Operations
+// ============================================================================
+
+export interface SearchTemplate {
+	id: string;
+	name: string;
+	description: string | null;
+	query_freeform: string | null;
+	query_structured: string | null;
+	category: string | null;
+	is_public: boolean;
+	use_count: number;
+	created_at: string;
+}
+
+export async function getSearchTemplates(db: D1Database, category?: string): Promise<SearchTemplate[]> {
+	let query = 'SELECT * FROM search_templates WHERE is_public = 1';
+	const params: string[] = [];
+
+	if (category) {
+		query += ' AND category = ?';
+		params.push(category);
+	}
+
+	query += ' ORDER BY use_count DESC LIMIT 50';
+
+	const result = await db.prepare(query).bind(...params).all();
+
+	return (result.results ?? []).map((row) => ({
+		...row,
+		is_public: Boolean((row as Record<string, unknown>).is_public)
+	})) as SearchTemplate[];
+}
+
+export async function getSearchTemplate(db: D1Database, templateId: string): Promise<SearchTemplate | null> {
+	const result = await db.prepare('SELECT * FROM search_templates WHERE id = ?').bind(templateId).first();
+	if (!result) return null;
+	return { ...result, is_public: Boolean(result.is_public) } as SearchTemplate;
+}
+
+export async function incrementTemplateUsage(db: D1Database, templateId: string): Promise<void> {
+	await db.prepare('UPDATE search_templates SET use_count = use_count + 1 WHERE id = ?').bind(templateId).run();
+}
+
+// ============================================================================
+// Push Subscription Operations
+// ============================================================================
+
+export interface PushSubscription {
+	id: string;
+	user_id: string;
+	endpoint: string;
+	p256dh: string;
+	auth: string;
+	created_at: string;
+}
+
+export async function savePushSubscription(
+	db: D1Database,
+	userId: string,
+	endpoint: string,
+	p256dh: string,
+	auth: string
+): Promise<PushSubscription> {
+	const id = generateId();
+	const timestamp = now();
+
+	// Upsert based on endpoint
+	await db
+		.prepare(
+			`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(endpoint) DO UPDATE SET p256dh = ?, auth = ?`
+		)
+		.bind(id, userId, endpoint, p256dh, auth, timestamp, p256dh, auth)
+		.run();
+
+	return { id, user_id: userId, endpoint, p256dh, auth, created_at: timestamp };
+}
+
+export async function getPushSubscriptions(db: D1Database, userId: string): Promise<PushSubscription[]> {
+	const result = await db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').bind(userId).all<PushSubscription>();
+	return result.results ?? [];
+}
+
+export async function deletePushSubscription(db: D1Database, endpoint: string): Promise<void> {
+	await db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').bind(endpoint).run();
+}

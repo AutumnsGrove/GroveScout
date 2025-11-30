@@ -85,7 +85,7 @@ export interface CreditLedgerEntry {
 	created_at: string;
 }
 
-export type CreditReason = 'subscription' | 'purchase' | 'search' | 'refund' | 'bonus';
+export type CreditReason = 'subscription' | 'purchase' | 'search' | 'refund' | 'bonus' | 'referral';
 
 export interface Subscription {
 	id: string;

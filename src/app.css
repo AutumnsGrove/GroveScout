@@ -15,7 +15,7 @@
 	--color-error: #ef4444;
 	--color-error-light: #fee2e2;
 
-	/* Neutrals */
+	/* Neutrals - Light Theme */
 	--color-text: #1f2937;
 	--color-text-secondary: #6b7280;
 	--color-text-muted: #9ca3af;
@@ -55,6 +55,60 @@
 	/* Transitions */
 	--transition-fast: 150ms ease;
 	--transition-normal: 200ms ease;
+}
+
+/* Dark Theme */
+[data-theme='dark'] {
+	--color-primary: #818cf8;
+	--color-primary-hover: #6366f1;
+	--color-primary-light: #312e81;
+
+	--color-success: #34d399;
+	--color-success-light: #064e3b;
+	--color-warning: #fbbf24;
+	--color-warning-light: #78350f;
+	--color-error: #f87171;
+	--color-error-light: #7f1d1d;
+
+	--color-text: #f9fafb;
+	--color-text-secondary: #d1d5db;
+	--color-text-muted: #9ca3af;
+	--color-border: #374151;
+	--color-bg: #111827;
+	--color-bg-secondary: #1f2937;
+	--color-bg-tertiary: #374151;
+
+	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+	--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+	--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+}
+
+/* System preference for dark mode (when no explicit theme is set) */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--color-primary: #818cf8;
+		--color-primary-hover: #6366f1;
+		--color-primary-light: #312e81;
+
+		--color-success: #34d399;
+		--color-success-light: #064e3b;
+		--color-warning: #fbbf24;
+		--color-warning-light: #78350f;
+		--color-error: #f87171;
+		--color-error-light: #7f1d1d;
+
+		--color-text: #f9fafb;
+		--color-text-secondary: #d1d5db;
+		--color-text-muted: #9ca3af;
+		--color-border: #374151;
+		--color-bg: #111827;
+		--color-bg-secondary: #1f2937;
+		--color-bg-tertiary: #374151;
+
+		--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+		--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+		--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+	}
 }
 
 /* Reset & Base Styles */
