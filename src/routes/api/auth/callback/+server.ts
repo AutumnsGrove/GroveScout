@@ -8,13 +8,15 @@ import {
 	handleOAuthCallback,
 	createSessionCookie
 } from '$lib/server/auth';
+import { createResendClient, sendWelcomeEmail } from '$lib/server/email';
 
 export const GET: RequestHandler = async ({ url, platform }) => {
 	if (!platform) {
 		return new Response('Platform not available', { status: 500 });
 	}
 
-	const { DB, KV, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SITE_URL, ENVIRONMENT } = platform.env;
+	const { DB, KV, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SITE_URL, ENVIRONMENT, RESEND_API_KEY } =
+		platform.env;
 
 	const code = url.searchParams.get('code');
 	const state = url.searchParams.get('state');
@@ -61,6 +63,19 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		// Set session cookie
 		const isSecure = ENVIRONMENT === 'production';
 		const cookie = createSessionCookie(session.id, isSecure);
+
+		// Send welcome email to new users
+		if (isNewUser) {
+			try {
+				const resend = createResendClient(RESEND_API_KEY);
+				await sendWelcomeEmail(resend, userInfo.email, {
+					name: userInfo.name?.split(' ')[0] // First name only
+				});
+			} catch (emailError) {
+				console.error('Failed to send welcome email:', emailError);
+				// Don't fail the auth flow if email fails
+			}
+		}
 
 		// Redirect to original destination or profile setup for new users
 		const redirectTo = isNewUser ? '/profile' : oauthState.redirect_to;

@@ -2,7 +2,8 @@
 // Processes search jobs from the queue
 
 import type { SearchJob, CuratedResults, ProductResult } from '$lib/types';
-import { updateSearchStatus, createSearchResult, addCreditEntry } from '../db';
+import { updateSearchStatus, createSearchResult, addCreditEntry, getUserById } from '../db';
+import { createResendClient, sendSearchCompletedEmail, sendSearchFailedEmail } from '../email';
 import { runSearchOrchestrator } from './orchestrator';
 import type { SavedProduct } from './types';
 
@@ -11,6 +12,8 @@ export interface WorkerEnv {
 	KV: KVNamespace;
 	ANTHROPIC_API_KEY: string;
 	BRAVE_API_KEY: string;
+	RESEND_API_KEY: string;
+	SITE_URL: string;
 }
 
 export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<void> {
@@ -85,12 +88,68 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 		});
 
 		console.log(`[Scout] Search ${search_id} completed with ${curated.length} results`);
+
+		// Send email notification
+		await sendCompletionEmail(env, job.user_id, {
+			query: query_freeform || 'your search',
+			resultCount: curated.length,
+			searchId: search_id
+		});
 	} catch (error) {
 		console.error(`[Scout] Search ${search_id} failed:`, error);
 
+		const errorMessage = error instanceof Error ? error.message : 'Search failed unexpectedly';
+
 		await updateSearchStatus(env.DB, search_id, 'failed', {
-			error_message: error instanceof Error ? error.message : 'Search failed unexpectedly'
+			error_message: errorMessage
 		});
+
+		// Send failure email notification
+		await sendFailureEmail(env, job.user_id, {
+			query: query_freeform || 'your search',
+			reason: errorMessage
+		});
+	}
+}
+
+async function sendCompletionEmail(
+	env: WorkerEnv,
+	userId: string,
+	data: { query: string; resultCount: number; searchId: string }
+): Promise<void> {
+	try {
+		const user = await getUserById(env.DB, userId);
+		if (!user) return;
+
+		const resend = createResendClient(env.RESEND_API_KEY);
+		await sendSearchCompletedEmail(resend, user.email, {
+			searchQuery: data.query,
+			resultCount: data.resultCount,
+			resultsUrl: `${env.SITE_URL}/search/${data.searchId}`
+		});
+	} catch (error) {
+		// Log but don't fail the job if email fails
+		console.error('[Scout] Failed to send completion email:', error);
+	}
+}
+
+async function sendFailureEmail(
+	env: WorkerEnv,
+	userId: string,
+	data: { query: string; reason: string }
+): Promise<void> {
+	try {
+		const user = await getUserById(env.DB, userId);
+		if (!user) return;
+
+		const resend = createResendClient(env.RESEND_API_KEY);
+		await sendSearchFailedEmail(resend, user.email, {
+			searchQuery: data.query,
+			reason: data.reason
+		});
+	} catch (error) {
+		// Log but don't fail the job if email fails
+		console.error('[Scout] Failed to send failure email:', error);
 	}
 }
 
