@@ -9,6 +9,7 @@ import {
 	createSessionCookie
 } from '$lib/server/auth';
 import { createResendClient, sendWelcomeEmail } from '$lib/server/email';
+import { trackEvent } from '$lib/server/db';
 
 export const GET: RequestHandler = async ({ url, platform }) => {
 	if (!platform) {
@@ -63,6 +64,11 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		// Set session cookie
 		const isSecure = ENVIRONMENT === 'production';
 		const cookie = createSessionCookie(session.id, isSecure);
+
+		// Track analytics
+		await trackEvent(DB, isNewUser ? 'user_signup' : 'user_login', session.user_id, {
+			provider: 'google'
+		});
 
 		// Send welcome email to new users
 		if (isNewUser) {

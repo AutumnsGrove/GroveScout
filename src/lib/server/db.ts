@@ -22,14 +22,48 @@ export function now(): string {
 // User Operations
 // ============================================================================
 
+export async function createUser(
+	db: D1Database,
+	data: { email: string; auth_provider: string; auth_provider_id: string }
+): Promise<User> {
+	const id = generateId();
+	const timestamp = now();
+
+	await db
+		.prepare(
+			`INSERT INTO users (id, email, auth_provider, auth_provider_id, is_admin, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, ?, ?)`
+		)
+		.bind(id, data.email, data.auth_provider, data.auth_provider_id, timestamp, timestamp)
+		.run();
+
+	return {
+		id,
+		email: data.email,
+		auth_provider: data.auth_provider as 'google' | 'apple',
+		auth_provider_id: data.auth_provider_id,
+		is_admin: false,
+		created_at: timestamp,
+		updated_at: timestamp
+	};
+}
+
+// Convert D1 integer to boolean for is_admin
+function parseUser(row: Record<string, unknown>): User {
+	return {
+		...row,
+		is_admin: Boolean(row.is_admin)
+	} as User;
+}
+
 export async function getUserById(db: D1Database, id: string): Promise<User | null> {
-	const result = await db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<User>();
-	return result ?? null;
+	const result = await db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first();
+	return result ? parseUser(result) : null;
 }
 
 export async function getUserByEmail(db: D1Database, email: string): Promise<User | null> {
-	const result = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<User>();
-	return result ?? null;
+	const result = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
+	return result ? parseUser(result) : null;
 }
 
 export async function getUserByProvider(
@@ -40,33 +74,8 @@ export async function getUserByProvider(
 	const result = await db
 		.prepare('SELECT * FROM users WHERE auth_provider = ? AND auth_provider_id = ?')
 		.bind(provider, providerId)
-		.first<User>();
-	return result ?? null;
-}
-
-export async function createUser(
-	db: D1Database,
-	data: { email: string; auth_provider: string; auth_provider_id: string }
-): Promise<User> {
-	const id = generateId();
-	const timestamp = now();
-
-	await db
-		.prepare(
-			`INSERT INTO users (id, email, auth_provider, auth_provider_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-		)
-		.bind(id, data.email, data.auth_provider, data.auth_provider_id, timestamp, timestamp)
-		.run();
-
-	return {
-		id,
-		email: data.email,
-		auth_provider: data.auth_provider as 'google' | 'apple',
-		auth_provider_id: data.auth_provider_id,
-		created_at: timestamp,
-		updated_at: timestamp
-	};
+		.first();
+	return result ? parseUser(result) : null;
 }
 
 // ============================================================================
@@ -440,5 +449,249 @@ export async function upsertSubscription(
 			timestamp,
 			timestamp
 		)
+		.run();
+}
+
+// ============================================================================
+// Admin Operations
+// ============================================================================
+
+export interface AdminStats {
+	totalUsers: number;
+	totalSearches: number;
+	totalCreditsUsed: number;
+	activeSubscriptions: number;
+	recentSearches: number; // Last 24h
+	recentUsers: number; // Last 24h
+}
+
+export async function getAdminStats(db: D1Database): Promise<AdminStats> {
+	const [users, searches, credits, subs, recentSearches, recentUsers] = await Promise.all([
+		db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>(),
+		db.prepare('SELECT COUNT(*) as count FROM searches').first<{ count: number }>(),
+		db
+			.prepare("SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM credit_ledger WHERE reason = 'search'")
+			.first<{ total: number }>(),
+		db
+			.prepare("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'active'")
+			.first<{ count: number }>(),
+		db
+			.prepare("SELECT COUNT(*) as count FROM searches WHERE created_at > datetime('now', '-1 day')")
+			.first<{ count: number }>(),
+		db
+			.prepare("SELECT COUNT(*) as count FROM users WHERE created_at > datetime('now', '-1 day')")
+			.first<{ count: number }>()
+	]);
+
+	return {
+		totalUsers: users?.count ?? 0,
+		totalSearches: searches?.count ?? 0,
+		totalCreditsUsed: credits?.total ?? 0,
+		activeSubscriptions: subs?.count ?? 0,
+		recentSearches: recentSearches?.count ?? 0,
+		recentUsers: recentUsers?.count ?? 0
+	};
+}
+
+export async function getAllUsers(
+	db: D1Database,
+	limit = 50,
+	offset = 0
+): Promise<{ users: User[]; total: number }> {
+	const [usersResult, countResult] = await Promise.all([
+		db
+			.prepare('SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?')
+			.bind(limit, offset)
+			.all(),
+		db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>()
+	]);
+
+	const users = (usersResult.results ?? []).map(parseUser);
+
+	return {
+		users,
+		total: countResult?.count ?? 0
+	};
+}
+
+export async function getAllSearches(
+	db: D1Database,
+	limit = 50,
+	offset = 0
+): Promise<{ searches: (Search & { user_email: string })[]; total: number }> {
+	const [searchesResult, countResult] = await Promise.all([
+		db
+			.prepare(
+				`SELECT s.*, u.email as user_email
+				 FROM searches s
+				 JOIN users u ON s.user_id = u.id
+				 ORDER BY s.created_at DESC LIMIT ? OFFSET ?`
+			)
+			.bind(limit, offset)
+			.all<Search & { user_email: string }>(),
+		db.prepare('SELECT COUNT(*) as count FROM searches').first<{ count: number }>()
+	]);
+
+	return {
+		searches: searchesResult.results ?? [],
+		total: countResult?.count ?? 0
+	};
+}
+
+export async function setUserAdmin(db: D1Database, userId: string, isAdmin: boolean): Promise<void> {
+	await db
+		.prepare('UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?')
+		.bind(isAdmin ? 1 : 0, now(), userId)
+		.run();
+}
+
+// ============================================================================
+// Analytics Operations
+// ============================================================================
+
+export type AnalyticsEventType =
+	| 'user_signup'
+	| 'user_login'
+	| 'search_created'
+	| 'search_completed'
+	| 'search_failed'
+	| 'credits_purchased'
+	| 'subscription_created'
+	| 'subscription_cancelled'
+	| 'profile_updated';
+
+export interface AnalyticsEvent {
+	id: string;
+	event_type: AnalyticsEventType;
+	user_id: string | null;
+	metadata: string | null;
+	created_at: string;
+}
+
+export async function trackEvent(
+	db: D1Database,
+	eventType: AnalyticsEventType,
+	userId?: string | null,
+	metadata?: Record<string, unknown>
+): Promise<void> {
+	const id = generateId();
+	const timestamp = now();
+
+	try {
+		await db
+			.prepare(
+				`INSERT INTO analytics_events (id, event_type, user_id, metadata, created_at)
+				 VALUES (?, ?, ?, ?, ?)`
+			)
+			.bind(id, eventType, userId ?? null, metadata ? JSON.stringify(metadata) : null, timestamp)
+			.run();
+
+		// Also update daily stats
+		await updateDailyStats(db, eventType);
+	} catch (error) {
+		// Don't fail the main operation if analytics fails
+		console.error('[Analytics] Failed to track event:', error);
+	}
+}
+
+async function updateDailyStats(db: D1Database, eventType: AnalyticsEventType): Promise<void> {
+	const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+	// Map event types to stat columns
+	const statColumn = getStatColumn(eventType);
+	if (!statColumn) return;
+
+	// Upsert daily stats
+	await db
+		.prepare(
+			`INSERT INTO daily_stats (date, ${statColumn})
+			 VALUES (?, 1)
+			 ON CONFLICT(date) DO UPDATE SET ${statColumn} = ${statColumn} + 1`
+		)
+		.bind(today)
+		.run();
+}
+
+function getStatColumn(eventType: AnalyticsEventType): string | null {
+	switch (eventType) {
+		case 'user_signup':
+			return 'signups';
+		case 'search_created':
+		case 'search_completed':
+			return 'searches';
+		case 'user_login':
+			return 'logins';
+		default:
+			return null;
+	}
+}
+
+export interface DailyStats {
+	date: string;
+	signups: number;
+	searches: number;
+	logins: number;
+	revenue_cents: number;
+}
+
+export async function getDailyStats(db: D1Database, days = 30): Promise<DailyStats[]> {
+	const result = await db
+		.prepare(
+			`SELECT date,
+					COALESCE(signups, 0) as signups,
+					COALESCE(searches, 0) as searches,
+					COALESCE(logins, 0) as logins,
+					COALESCE(revenue_cents, 0) as revenue_cents
+			 FROM daily_stats
+			 WHERE date >= date('now', '-' || ? || ' days')
+			 ORDER BY date DESC`
+		)
+		.bind(days)
+		.all<DailyStats>();
+
+	return result.results ?? [];
+}
+
+export async function getEventsByType(
+	db: D1Database,
+	eventType: AnalyticsEventType,
+	limit = 100
+): Promise<AnalyticsEvent[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM analytics_events
+			 WHERE event_type = ?
+			 ORDER BY created_at DESC
+			 LIMIT ?`
+		)
+		.bind(eventType, limit)
+		.all<AnalyticsEvent>();
+
+	return result.results ?? [];
+}
+
+export async function getRecentEvents(db: D1Database, limit = 100): Promise<AnalyticsEvent[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM analytics_events
+			 ORDER BY created_at DESC
+			 LIMIT ?`
+		)
+		.bind(limit)
+		.all<AnalyticsEvent>();
+
+	return result.results ?? [];
+}
+
+export async function updateDailyRevenue(db: D1Database, amountCents: number): Promise<void> {
+	const today = new Date().toISOString().split('T')[0];
+
+	await db
+		.prepare(
+			`INSERT INTO daily_stats (date, revenue_cents)
+			 VALUES (?, ?)
+			 ON CONFLICT(date) DO UPDATE SET revenue_cents = revenue_cents + ?`
+		)
+		.bind(today, amountCents, amountCents)
 		.run();
 }

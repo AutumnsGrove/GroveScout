@@ -2,11 +2,27 @@
 	import { page } from '$app/stores';
 
 	const redirect = $page.url.searchParams.get('redirect') || '/dashboard';
+	const error = $page.url.searchParams.get('error');
+
+	const errorMessages: Record<string, string> = {
+		auth_failed: 'Authentication failed. Please try again.',
+		invalid_state: 'Session expired. Please try again.',
+		missing_params: 'Missing authentication parameters.',
+		no_email: 'Could not retrieve your email address.',
+		apple_not_configured: 'Apple Sign In is not available yet.',
+		invalid_method: 'Invalid authentication method.'
+	};
 </script>
 
 <div class="login-page">
 	<h1>Sign in to Scout</h1>
 	<p class="subtitle">Start finding deals in minutes.</p>
+
+	{#if error}
+		<div class="error-alert">
+			{errorMessages[error] || 'An error occurred. Please try again.'}
+		</div>
+	{/if}
 
 	<div class="auth-buttons">
 		<a href="/api/auth/google?redirect={encodeURIComponent(redirect)}" class="auth-btn google">
@@ -125,5 +141,14 @@
 		margin-top: 2rem;
 		font-size: 0.875rem;
 		color: #999;
+	}
+
+	.error-alert {
+		background: var(--color-error-light, #fee2e2);
+		color: #991b1b;
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+		margin-bottom: 1.5rem;
+		font-size: 0.875rem;
 	}
 </style>

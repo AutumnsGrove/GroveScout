@@ -2,7 +2,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { SearchInputSchema, type SearchJob, type ProfileContext } from '$lib/types';
-import { createSearch, getProfileByUserId, getCreditBalance } from '$lib/server/db';
+import { createSearch, getProfileByUserId, getCreditBalance, createSearchResult, trackEvent } from '$lib/server/db';
+import { findCachedSearch } from '$lib/server/cache';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.user) {
@@ -13,7 +14,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		return json({ error: { message: 'Platform not available' } }, { status: 500 });
 	}
 
-	const { DB, SEARCH_QUEUE } = platform.env;
+	const { DB, KV, SEARCH_QUEUE } = platform.env;
 
 	// Parse and validate input
 	let body;
@@ -33,7 +34,46 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 	const { query, structured } = parseResult.data;
 
-	// Check credits
+	// Check for cached results first
+	const cachedResult = await findCachedSearch(KV, query, structured);
+	if (cachedResult) {
+		// Create a search record that's immediately completed with cached results
+		const search = await createSearch(DB, {
+			user_id: locals.user.id,
+			query_freeform: query,
+			query_structured: structured ? JSON.stringify(structured) : undefined
+		});
+
+		// Create search result from cache (no credit charge for cached results)
+		await createSearchResult(DB, {
+			search_id: search.id,
+			results_raw: cachedResult.cached.results_raw,
+			results_curated: cachedResult.cached.results_curated,
+			cache_key: cachedResult.cacheKey
+		});
+
+		// Update search to completed status
+		await DB.prepare(
+			`UPDATE searches SET status = 'completed', completed_at = datetime('now'), credits_used = 0 WHERE id = ?`
+		).bind(search.id).run();
+
+		// Track cached search
+		await trackEvent(DB, 'search_completed', locals.user.id, {
+			search_id: search.id,
+			cached: true
+		});
+
+		return json({
+			success: true,
+			data: {
+				id: search.id,
+				status: 'completed',
+				cached: true
+			}
+		});
+	}
+
+	// Check credits (only if not cached)
 	const credits = await getCreditBalance(DB, locals.user.id);
 	if (credits < 1) {
 		return json(
@@ -90,6 +130,12 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	};
 
 	await SEARCH_QUEUE.send(job);
+
+	// Track search created
+	await trackEvent(DB, 'search_created', locals.user.id, {
+		search_id: search.id,
+		has_structured: !!structured
+	});
 
 	return json({
 		success: true,

@@ -4,10 +4,59 @@
 import type { Handle } from '@sveltejs/kit';
 import { getSession, getSessionIdFromCookie } from '$lib/server/auth';
 import { getUserById } from '$lib/server/db';
+import {
+	checkRateLimit,
+	getClientIdentifier,
+	rateLimitedResponse,
+	RATE_LIMITS,
+	type RateLimitConfig
+} from '$lib/server/ratelimit';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	// Skip auth for static assets and public routes
 	const path = event.url.pathname;
+
+	// Skip rate limiting for static assets
+	if (path.startsWith('/_app/') || path.startsWith('/favicon')) {
+		return resolve(event);
+	}
+
+	// Get platform bindings
+	const platform = event.platform;
+
+	// Apply rate limiting for API routes
+	if (platform && path.startsWith('/api/')) {
+		const { KV } = platform.env;
+
+		// Determine rate limit config based on path
+		let config: RateLimitConfig = RATE_LIMITS.api;
+		let prefix = 'api:';
+
+		if (path.startsWith('/api/auth/')) {
+			config = RATE_LIMITS.auth;
+			prefix = 'auth:';
+		} else if (path.startsWith('/api/search')) {
+			config = path === '/api/search' && event.request.method === 'POST'
+				? RATE_LIMITS.searchCreate
+				: RATE_LIMITS.search;
+			prefix = 'search:';
+		} else if (path.startsWith('/api/webhooks/')) {
+			config = RATE_LIMITS.webhook;
+			prefix = 'webhook:';
+		} else if (path.startsWith('/api/admin/')) {
+			config = RATE_LIMITS.admin;
+			prefix = 'admin:';
+		}
+
+		// Get client identifier (will use user ID after auth check if available)
+		const identifier = getClientIdentifier(event.request, null, prefix);
+		const result = await checkRateLimit(KV, identifier, config);
+
+		if (!result.allowed) {
+			return rateLimitedResponse(result, config);
+		}
+	}
+
+	// Skip auth for public routes
 	if (
 		path.startsWith('/api/webhooks') ||
 		path.startsWith('/s/') ||
@@ -18,8 +67,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
-	// Get platform bindings
-	const platform = event.platform;
 	if (!platform) {
 		// Local development without wrangler
 		event.locals.user = null;

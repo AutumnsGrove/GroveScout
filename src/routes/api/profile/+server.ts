@@ -2,7 +2,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { ProfileUpdateSchema } from '$lib/types';
-import { getProfileByUserId, updateProfile } from '$lib/server/db';
+import { getProfileByUserId, updateProfile, trackEvent } from '$lib/server/db';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) {
@@ -80,6 +80,11 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 	}
 
 	await updateProfile(DB, locals.user.id, updateData);
+
+	// Track profile update
+	await trackEvent(DB, 'profile_updated', locals.user.id, {
+		fields_updated: Object.keys(updateData)
+	});
 
 	return json({ success: true });
 };

@@ -12,8 +12,24 @@ export interface User {
 	email: string;
 	auth_provider: 'google' | 'apple';
 	auth_provider_id: string;
+	is_admin: boolean;
 	created_at: string;
 	updated_at: string;
+}
+
+export interface AnalyticsEvent {
+	id: string;
+	event_type: string;
+	user_id: string | null;
+	session_id: string | null;
+	properties: string | null; // JSON
+	created_at: string;
+}
+
+export interface DailyStat {
+	date: string;
+	metric: string;
+	value: number;
 }
 
 export interface Profile {

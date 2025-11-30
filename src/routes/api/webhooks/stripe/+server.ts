@@ -3,8 +3,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import Stripe from 'stripe';
 import { createStripeClient, verifyWebhookSignature, PLANS } from '$lib/server/stripe';
-import { upsertSubscription, addCreditEntry, getUserByEmail, getUserById, getCreditBalance } from '$lib/server/db';
-import { generateId } from '$lib/server/db';
+import { upsertSubscription, addCreditEntry, getUserByEmail, getUserById, getCreditBalance, trackEvent, updateDailyRevenue } from '$lib/server/db';
 import {
 	createResendClient,
 	sendSubscriptionConfirmedEmail,
@@ -105,6 +104,15 @@ async function handleCheckoutCompleted(
 		});
 		console.log(`[Stripe] Granted ${creditAmount} credits to user ${userId} (credit pack)`);
 
+		// Track purchase analytics
+		await trackEvent(db, 'credits_purchased', userId, {
+			credits: creditAmount,
+			amount_cents: session.amount_total
+		});
+		if (session.amount_total) {
+			await updateDailyRevenue(db, session.amount_total);
+		}
+
 		// Send confirmation email
 		try {
 			const user = await getUserById(db, userId);
@@ -171,6 +179,13 @@ async function handleSubscriptionUpdate(db: D1Database, subscription: Stripe.Sub
 		current_period_end: new Date(periodEnd * 1000).toISOString()
 	});
 
+	// Track subscription created
+	await trackEvent(db, 'subscription_created', userId, {
+		plan,
+		status,
+		amount_cents: amount
+	});
+
 	console.log(`[Stripe] Updated subscription for user ${userId}: ${plan} (${status})`);
 }
 
@@ -195,6 +210,11 @@ async function handleSubscriptionCanceled(db: D1Database, subscription: Stripe.S
 		stripe_subscription_id: subscription.id,
 		current_period_start: new Date(periodStart * 1000).toISOString(),
 		current_period_end: new Date(periodEnd * 1000).toISOString()
+	});
+
+	// Track subscription cancelled
+	await trackEvent(db, 'subscription_cancelled', userId, {
+		subscription_id: subscription.id
 	});
 
 	console.log(`[Stripe] Subscription canceled for user ${userId}`);
@@ -254,6 +274,11 @@ async function handleInvoicePaid(db: D1Database, resendApiKey: string, invoice: 
 		stripe_payment_id: paymentIntentId ?? undefined,
 		note: `Monthly subscription credits (${credits})`
 	});
+
+	// Track revenue
+	if (amount > 0) {
+		await updateDailyRevenue(db, amount);
+	}
 
 	console.log(`[Stripe] Granted ${credits} credits to user ${userId} (subscription renewal)`);
 

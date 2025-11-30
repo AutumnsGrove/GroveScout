@@ -2,8 +2,9 @@
 // Processes search jobs from the queue
 
 import type { SearchJob, CuratedResults, ProductResult } from '$lib/types';
-import { updateSearchStatus, createSearchResult, addCreditEntry, getUserById } from '../db';
+import { updateSearchStatus, createSearchResult, addCreditEntry, getUserById, trackEvent } from '../db';
 import { createResendClient, sendSearchCompletedEmail, sendSearchFailedEmail } from '../email';
+import { cacheSearchResult, generateSearchCacheKey } from '../cache';
 import { runSearchOrchestrator } from './orchestrator';
 import type { SavedProduct } from './types';
 
@@ -63,14 +64,24 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 		};
 
 		// Generate cache key
-		const cacheKey = await generateCacheKey(query_freeform || '', query_structured);
+		const cacheKey = await generateSearchCacheKey(query_freeform || '', query_structured);
+
+		const resultsRaw = JSON.stringify(raw);
+		const resultsCurated = JSON.stringify(curatedResults);
 
 		// Save results
 		await createSearchResult(env.DB, {
 			search_id,
-			results_raw: JSON.stringify(raw),
-			results_curated: JSON.stringify(curatedResults),
+			results_raw: resultsRaw,
+			results_curated: resultsCurated,
 			cache_key: cacheKey
+		});
+
+		// Cache results in KV for future searches
+		await cacheSearchResult(env.KV, cacheKey, {
+			results_raw: resultsRaw,
+			results_curated: resultsCurated,
+			query_freeform: query_freeform || ''
 		});
 
 		// Deduct credit
@@ -85,6 +96,13 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 		// Update status to completed
 		await updateSearchStatus(env.DB, search_id, 'completed', {
 			credits_used: 1
+		});
+
+		// Track search completed
+		await trackEvent(env.DB, 'search_completed', job.user_id, {
+			search_id,
+			result_count: curated.length,
+			raw_count: raw.length
 		});
 
 		console.log(`[Scout] Search ${search_id} completed with ${curated.length} results`);
@@ -102,6 +120,12 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 
 		await updateSearchStatus(env.DB, search_id, 'failed', {
 			error_message: errorMessage
+		});
+
+		// Track search failed
+		await trackEvent(env.DB, 'search_failed', job.user_id, {
+			search_id,
+			error: errorMessage
 		});
 
 		// Send failure email notification
@@ -177,22 +201,6 @@ function formatProductResult(product: SavedProduct, rank: number): ProductResult
 	}
 
 	return result;
-}
-
-async function generateCacheKey(
-	query: string,
-	structured: SearchJob['query_structured']
-): Promise<string> {
-	const normalized = query.toLowerCase().trim();
-	const data = JSON.stringify({ query: normalized, structured });
-
-	// Use Web Crypto API for SHA-256
-	const encoder = new TextEncoder();
-	const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-
-	return `cache:${hashHex}`;
 }
 
 // Queue handler export for Cloudflare Workers

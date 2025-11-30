@@ -181,6 +181,173 @@ export async function getGoogleUserInfo(accessToken: string): Promise<GoogleUser
 }
 
 // ============================================================================
+// Apple OAuth
+// ============================================================================
+
+interface AppleTokenResponse {
+	access_token: string;
+	token_type: string;
+	expires_in: number;
+	refresh_token: string;
+	id_token: string;
+}
+
+interface AppleIdTokenPayload {
+	iss: string;
+	aud: string;
+	exp: number;
+	iat: number;
+	sub: string; // User's unique Apple ID
+	email?: string;
+	email_verified?: string;
+	is_private_email?: string;
+	auth_time: number;
+	nonce_supported: boolean;
+}
+
+export function getAppleAuthUrl(clientId: string, redirectUri: string, state: string): string {
+	const params = new URLSearchParams({
+		client_id: clientId,
+		redirect_uri: redirectUri,
+		response_type: 'code',
+		scope: 'name email',
+		state,
+		response_mode: 'form_post'
+	});
+
+	return `https://appleid.apple.com/auth/authorize?${params.toString()}`;
+}
+
+export async function createAppleClientSecret(
+	clientId: string,
+	teamId: string,
+	keyId: string,
+	privateKey: string
+): Promise<string> {
+	// Apple requires a JWT signed with ES256 as the client secret
+	const now = Math.floor(Date.now() / 1000);
+	const exp = now + 60 * 60 * 24 * 180; // 180 days max
+
+	const header = {
+		alg: 'ES256',
+		kid: keyId,
+		typ: 'JWT'
+	};
+
+	const payload = {
+		iss: teamId,
+		iat: now,
+		exp,
+		aud: 'https://appleid.apple.com',
+		sub: clientId
+	};
+
+	// Base64url encode
+	const base64UrlEncode = (obj: object) => {
+		const json = JSON.stringify(obj);
+		const base64 = btoa(json);
+		return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+	};
+
+	const headerEncoded = base64UrlEncode(header);
+	const payloadEncoded = base64UrlEncode(payload);
+	const message = `${headerEncoded}.${payloadEncoded}`;
+
+	// Import the private key and sign
+	const pemContents = privateKey
+		.replace('-----BEGIN PRIVATE KEY-----', '')
+		.replace('-----END PRIVATE KEY-----', '')
+		.replace(/\s/g, '');
+
+	const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
+
+	const cryptoKey = await crypto.subtle.importKey(
+		'pkcs8',
+		binaryKey,
+		{ name: 'ECDSA', namedCurve: 'P-256' },
+		false,
+		['sign']
+	);
+
+	const signature = await crypto.subtle.sign(
+		{ name: 'ECDSA', hash: 'SHA-256' },
+		cryptoKey,
+		new TextEncoder().encode(message)
+	);
+
+	// Convert signature to base64url
+	const signatureArray = new Uint8Array(signature);
+	const signatureBase64 = btoa(String.fromCharCode(...signatureArray))
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=/g, '');
+
+	return `${message}.${signatureBase64}`;
+}
+
+export async function exchangeAppleCode(
+	code: string,
+	clientId: string,
+	clientSecret: string,
+	redirectUri: string
+): Promise<AppleTokenResponse> {
+	const response = await fetch('https://appleid.apple.com/auth/token', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/x-www-form-urlencoded'
+		},
+		body: new URLSearchParams({
+			code,
+			client_id: clientId,
+			client_secret: clientSecret,
+			redirect_uri: redirectUri,
+			grant_type: 'authorization_code'
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Failed to exchange Apple code: ${error}`);
+	}
+
+	return response.json();
+}
+
+export function decodeAppleIdToken(idToken: string): AppleIdTokenPayload {
+	// Decode JWT without verification (verification should be done in production)
+	const parts = idToken.split('.');
+	if (parts.length !== 3) {
+		throw new Error('Invalid JWT format');
+	}
+
+	const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+	const payloadJson = atob(payloadBase64);
+	return JSON.parse(payloadJson);
+}
+
+export interface AppleUserInfo {
+	id: string;
+	email?: string;
+	name?: string;
+}
+
+export function getAppleUserInfo(idToken: string, userData?: { name?: { firstName?: string; lastName?: string } }): AppleUserInfo {
+	const payload = decodeAppleIdToken(idToken);
+
+	let name: string | undefined;
+	if (userData?.name) {
+		const parts = [userData.name.firstName, userData.name.lastName].filter(Boolean);
+		name = parts.join(' ') || undefined;
+	}
+
+	return {
+		id: payload.sub,
+		email: payload.email,
+		name
+	};
+}
+
+// ============================================================================
 // User Login/Signup Flow
 // ============================================================================
 
