@@ -1,0 +1,41 @@
+{
+	"name": "Scout - AI Deal Finder",
+	"short_name": "Scout",
+	"description": "AI-powered shopping research that finds the best deals for you",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#111827",
+	"theme_color": "#6366f1",
+	"orientation": "portrait-primary",
+	"icons": [
+		{
+			"src": "/icons/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/icons/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	],
+	"categories": ["shopping", "productivity", "utilities"],
+	"screenshots": [],
+	"shortcuts": [
+		{
+			"name": "New Search",
+			"short_name": "Search",
+			"description": "Start a new product search",
+			"url": "/search/new",
+			"icons": [{ "src": "/icons/search-96.png", "sizes": "96x96" }]
+		},
+		{
+			"name": "Dashboard",
+			"short_name": "Dashboard",
+			"description": "View your searches",
+			"url": "/dashboard"
+		}
+	]
+}

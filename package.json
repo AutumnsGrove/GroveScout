@@ -1,0 +1,36 @@
+{
+	"name": "scout",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"dev:wrangler": "wrangler pages dev --compatibility-date=2024-11-01 --compatibility-flags=nodejs_compat -- vite dev",
+		"build": "vite build",
+		"preview": "wrangler pages dev .svelte-kit/cloudflare",
+		"deploy": "npm run build && wrangler pages deploy .svelte-kit/cloudflare",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"db:migrate": "wrangler d1 execute scout-db --file=./migrations/0001_init.sql",
+		"db:migrate:local": "wrangler d1 execute scout-db --file=./migrations/0001_init.sql --local"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251128.0",
+		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/kit": "^2.48.5",
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"svelte": "^5.43.8",
+		"svelte-check": "^4.3.4",
+		"typescript": "^5.9.3",
+		"vite": "^7.2.2"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.71.0",
+		"@sveltejs/adapter-cloudflare": "^7.2.4",
+		"resend": "^6.5.2",
+		"stripe": "^20.0.0",
+		"wrangler": "^4.51.0",
+		"zod": "^4.1.13"
+	}
+}

@@ -1,5 +1,35 @@
-secrets.json
-*.log
-__pycache__/
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+.dev.vars
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Secrets
+secrets.json
+secrets_template.json
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
 .claude/
