@@ -5,17 +5,45 @@
 ---
 
 ## Project Purpose
-[Fill in: What this project does - 1-2 sentences]
+Scout (internal codename: **Research Goblin**) is an async deal-finding research agent that eliminates the cognitive overload of shopping. Users describe what they're looking for, Scout dispatches AI agents to search the web, and returns a curated list of 5 products with direct purchase links.
+
+**Product URL:** scout.grove.place
 
 ## Tech Stack
-[Fill in: Technologies, frameworks, and languages used]
-- Language:
-- Framework:
-- Key Libraries:
-- Package Manager:
+| Layer | Technology |
+|-------|------------|
+| Frontend | SvelteKit |
+| Backend | Cloudflare Workers |
+| Database | Cloudflare D1 (SQLite) |
+| Queue | Cloudflare Queues |
+| Cache | Cloudflare KV |
+| Auth | Custom OAuth (Google, Apple) |
+| AI | Claude API (Anthropic) |
+| Web Search | Brave Search API |
+| Payments | Stripe |
+| Email | Resend |
+| Package Manager | npm |
 
 ## Architecture Notes
-[Fill in: Key architectural decisions, patterns, or structure]
+### Multi-Agent Orchestration
+- **Orchestrator Agent**: Main reasoning engine that parses queries, dispatches sub-agents, aggregates results
+- **Deal Searcher**: Searches deal aggregators, price trackers, coupon sites
+- **Retailer Searcher**: Searches user's favorite retailers directly
+- **Quality Checker**: Verifies items are real, in stock, and match criteria
+- **Curator Agent**: Takes 15-25 raw results and curates down to 5 best matches
+
+### Key Patterns
+- Async job queue (Cloudflare Queues) for search execution
+- Credit-based billing (deduct on completion, not submission)
+- 24-hour cache with normalized query hashing
+- All prices stored in cents (avoid floating point)
+- Use Zod for runtime validation
+
+### Detailed Docs
+- `docs/PROJECT_SPEC.md` - Full product specification
+- `docs/DATA_MODEL.md` - Database schema with SQL migrations
+- `docs/AGENT_PROMPTS.md` - Agent prompt engineering
+- `docs/TODO.md` - Roadmap and milestones
 
 ---
 
