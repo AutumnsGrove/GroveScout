@@ -1,0 +1,52 @@
+// Scout - Search Status/Results Page
+import { error } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+import { getSearchById, getSearchResultBySearchId } from '$lib/server/db';
+import type { CuratedResults } from '$lib/types';
+
+export const load: PageServerLoad = async ({ params, locals, platform }) => {
+	if (!locals.user || !platform) {
+		throw error(401, 'Unauthorized');
+	}
+
+	const { DB } = platform.env;
+	const search = await getSearchById(DB, params.id);
+
+	if (!search) {
+		throw error(404, 'Search not found');
+	}
+
+	// Verify ownership
+	if (search.user_id !== locals.user.id) {
+		throw error(403, 'Not authorized to view this search');
+	}
+
+	let results: CuratedResults | null = null;
+	let shareToken: string | null = null;
+
+	if (search.status === 'completed') {
+		const searchResult = await getSearchResultBySearchId(DB, search.id);
+		if (searchResult) {
+			try {
+				results = JSON.parse(searchResult.results_curated);
+				shareToken = searchResult.share_token;
+			} catch {
+				// Invalid JSON, leave results null
+			}
+		}
+	}
+
+	return {
+		search: {
+			id: search.id,
+			query: search.query_freeform,
+			status: search.status,
+			error_message: search.error_message,
+			credits_used: search.credits_used,
+			created_at: search.created_at,
+			completed_at: search.completed_at
+		},
+		results,
+		shareToken
+	};
+};
