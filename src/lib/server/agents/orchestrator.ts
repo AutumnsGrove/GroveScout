@@ -5,6 +5,114 @@ import Anthropic from '@anthropic-ai/sdk';
 import { braveSearch, buildSearchQueries } from './brave';
 import type { SavedProduct, SearchContext } from './types';
 
+// Known safe retail domains (partial list - expand as needed)
+const KNOWN_SAFE_DOMAINS = new Set([
+	'amazon.com', 'www.amazon.com',
+	'ebay.com', 'www.ebay.com',
+	'walmart.com', 'www.walmart.com',
+	'target.com', 'www.target.com',
+	'bestbuy.com', 'www.bestbuy.com',
+	'costco.com', 'www.costco.com',
+	'nordstrom.com', 'www.nordstrom.com',
+	'macys.com', 'www.macys.com',
+	'kohls.com', 'www.kohls.com',
+	'homedepot.com', 'www.homedepot.com',
+	'lowes.com', 'www.lowes.com',
+	'etsy.com', 'www.etsy.com',
+	'wayfair.com', 'www.wayfair.com',
+	'zappos.com', 'www.zappos.com',
+	'nike.com', 'www.nike.com',
+	'adidas.com', 'www.adidas.com',
+	'gap.com', 'www.gap.com',
+	'oldnavy.com', 'www.oldnavy.com',
+	'hm.com', 'www.hm.com',
+	'zara.com', 'www.zara.com',
+	'asos.com', 'www.asos.com',
+	'shein.com', 'www.shein.com',
+	'aliexpress.com', 'www.aliexpress.com',
+	'newegg.com', 'www.newegg.com',
+	'bhphotovideo.com', 'www.bhphotovideo.com',
+	'overstock.com', 'www.overstock.com',
+	'chewy.com', 'www.chewy.com',
+	'sephora.com', 'www.sephora.com',
+	'ulta.com', 'www.ulta.com'
+]);
+
+/**
+ * Validate a product URL for safety
+ * Returns sanitized URL or null if unsafe
+ */
+function validateProductUrl(urlString: string | undefined): string | null {
+	if (!urlString || typeof urlString !== 'string') {
+		return null;
+	}
+
+	try {
+		const url = new URL(urlString);
+
+		// Only allow HTTPS URLs
+		if (url.protocol !== 'https:') {
+			return null;
+		}
+
+		// Block URLs with credentials
+		if (url.username || url.password) {
+			return null;
+		}
+
+		// Block localhost and private IPs
+		const hostname = url.hostname.toLowerCase();
+		if (
+			hostname === 'localhost' ||
+			hostname.startsWith('127.') ||
+			hostname.startsWith('192.168.') ||
+			hostname.startsWith('10.') ||
+			hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+		) {
+			return null;
+		}
+
+		// Return sanitized URL (removes any fragment)
+		return `${url.protocol}//${url.host}${url.pathname}${url.search}`;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Validate image URL with stricter checks
+ */
+function validateImageUrl(urlString: string | undefined): string | null {
+	if (!urlString || typeof urlString !== 'string') {
+		return null;
+	}
+
+	try {
+		const url = new URL(urlString);
+
+		// Only allow HTTPS
+		if (url.protocol !== 'https:') {
+			return null;
+		}
+
+		// Check for common image extensions or CDN patterns
+		const pathname = url.pathname.toLowerCase();
+		const hasImageExtension = /\.(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(pathname);
+		const isCommonCDN = /\.(cloudfront\.net|cloudinary\.com|imgix\.net|akamaized\.net|shopify\.com)$/i.test(url.hostname);
+
+		if (!hasImageExtension && !isCommonCDN) {
+			// Allow known retailer domains even without extension
+			if (!KNOWN_SAFE_DOMAINS.has(url.hostname.replace(/^www\./, ''))) {
+				return null;
+			}
+		}
+
+		return urlString;
+	} catch {
+		return null;
+	}
+}
+
 const ORCHESTRATOR_SYSTEM_PROMPT = `You are Scout, a shopping research assistant. Your job is to find the best deals matching a user's criteria and preferences.
 
 You analyze search results and extract product information. For each promising product you find, output a JSON object with this structure:
@@ -64,7 +172,9 @@ export async function runSearchOrchestrator(
 						.map((r) => `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`)
 						.join('\n\n');
 				} catch (err) {
-					console.error(`Search failed for "${q}":`, err);
+					// Sanitized error logging - don't expose query details or full error
+					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+					console.error(`Search batch failed: ${errorMessage.slice(0, 100)}`);
 					return '';
 				}
 			})
@@ -190,19 +300,44 @@ function parseProductsFromResponse(response: Anthropic.Message): SavedProduct[] 
 		for (const match of matches) {
 			try {
 				const product = JSON.parse(match);
-				if (product.name && product.price_current && product.url && product.retailer) {
-					products.push({
-						name: product.name,
-						price_current: product.price_current,
-						price_original: product.price_original,
-						retailer: product.retailer,
-						url: product.url,
-						image_url: product.image_url,
-						description: product.description,
-						confidence: product.confidence || 70,
-						notes: product.notes
-					});
+
+				// Validate required fields
+				if (!product.name || !product.price_current || !product.url || !product.retailer) {
+					continue;
 				}
+
+				// SECURITY: Validate and sanitize URLs
+				const validatedUrl = validateProductUrl(product.url);
+				if (!validatedUrl) {
+					// Skip products with invalid/unsafe URLs
+					continue;
+				}
+
+				// Validate image URL if provided
+				const validatedImageUrl = product.image_url
+					? validateImageUrl(product.image_url)
+					: undefined;
+
+				// Sanitize string fields to prevent XSS (even though Svelte escapes)
+				const sanitizedName = String(product.name).slice(0, 500);
+				const sanitizedRetailer = String(product.retailer).slice(0, 100);
+				const sanitizedDescription = product.description
+					? String(product.description).slice(0, 2000)
+					: undefined;
+
+				products.push({
+					name: sanitizedName,
+					price_current: Math.abs(Number(product.price_current)) || 0,
+					price_original: product.price_original
+						? Math.abs(Number(product.price_original))
+						: undefined,
+					retailer: sanitizedRetailer,
+					url: validatedUrl,
+					image_url: validatedImageUrl,
+					description: sanitizedDescription,
+					confidence: Math.min(100, Math.max(0, Number(product.confidence) || 70)),
+					notes: product.notes ? String(product.notes).slice(0, 500) : undefined
+				});
 			} catch {
 				// Skip invalid JSON
 			}

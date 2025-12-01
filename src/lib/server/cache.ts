@@ -13,21 +13,26 @@ export interface CachedSearchResult {
 
 /**
  * Generate a cache key from a search query
- * Normalizes the query to increase cache hits
+ * Uses conservative normalization to avoid collisions while still enabling cache hits
  */
 export async function generateSearchCacheKey(
 	queryFreeform: string,
 	queryStructured?: object | null
 ): Promise<string> {
-	// Normalize the query
+	// Conservative normalization - preserve special characters that affect meaning
+	// Only normalize whitespace and case for cache hit improvement
 	const normalizedQuery = queryFreeform
 		.toLowerCase()
 		.trim()
-		.replace(/\s+/g, ' ') // Normalize whitespace
-		.replace(/[^\w\s]/g, ''); // Remove special characters
+		.replace(/\s+/g, ' '); // Only normalize whitespace, keep special chars
 
+	// Include original query hash as well for collision detection
 	const dataToHash = JSON.stringify({
-		query: normalizedQuery,
+		// Primary: normalized for cache hits
+		query_normalized: normalizedQuery,
+		// Secondary: include original trimmed query to prevent collisions
+		query_original_hash: await hashString(queryFreeform.trim()),
+		// Structured query if provided
 		structured: queryStructured || null
 	});
 
@@ -38,6 +43,16 @@ export async function generateSearchCacheKey(
 	const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 
 	return `${CACHE_PREFIX}${hashHex}`;
+}
+
+/**
+ * Helper to hash a string
+ */
+async function hashString(str: string): Promise<string> {
+	const encoder = new TextEncoder();
+	const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(str));
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
 /**
