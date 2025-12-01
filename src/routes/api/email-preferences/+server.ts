@@ -1,7 +1,17 @@
 // Scout - Email Preferences API
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { z } from 'zod';
 import { getEmailPreferences, upsertEmailPreferences } from '$lib/server/db';
+
+// Validation schema for email preferences
+const EmailPreferencesSchema = z.object({
+	marketing: z.boolean().optional(),
+	search_completed: z.boolean().optional(),
+	search_failed: z.boolean().optional(),
+	weekly_digest: z.boolean().optional(),
+	product_updates: z.boolean().optional()
+}).strict(); // Reject unknown fields
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) {
@@ -45,13 +55,13 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 		return json({ error: { message: 'Invalid JSON' } }, { status: 400 });
 	}
 
-	const { marketing, search_completed, search_failed, weekly_digest, product_updates } = body as {
-		marketing?: boolean;
-		search_completed?: boolean;
-		search_failed?: boolean;
-		weekly_digest?: boolean;
-		product_updates?: boolean;
-	};
+	// Validate input with Zod
+	const parseResult = EmailPreferencesSchema.safeParse(body);
+	if (!parseResult.success) {
+		return json({ error: { message: 'Invalid preferences format' } }, { status: 400 });
+	}
+
+	const { marketing, search_completed, search_failed, weekly_digest, product_updates } = parseResult.data;
 
 	await upsertEmailPreferences(DB, locals.user.id, {
 		marketing,

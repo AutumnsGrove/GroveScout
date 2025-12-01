@@ -2,7 +2,7 @@
 // Authentication middleware and request handling
 
 import type { Handle } from '@sveltejs/kit';
-import { getSession, getSessionIdFromCookie } from '$lib/server/auth';
+import { getSession, getSessionIdFromCookie, refreshSession } from '$lib/server/auth';
 import { getUserById } from '$lib/server/db';
 import {
 	checkRateLimit,
@@ -11,6 +11,26 @@ import {
 	RATE_LIMITS,
 	type RateLimitConfig
 } from '$lib/server/ratelimit';
+
+// Security headers to add to all responses
+const SECURITY_HEADERS = {
+	'X-Frame-Options': 'DENY',
+	'X-Content-Type-Options': 'nosniff',
+	'X-XSS-Protection': '1; mode=block',
+	'Referrer-Policy': 'strict-origin-when-cross-origin',
+	'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+	'Content-Security-Policy': [
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline'", // inline for SvelteKit hydration
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' https: data:",
+		"font-src 'self'",
+		"connect-src 'self' https://api.stripe.com",
+		"frame-ancestors 'none'",
+		"base-uri 'self'",
+		"form-action 'self'"
+	].join('; ')
+};
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
@@ -93,6 +113,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const user = await getUserById(DB, session.user_id);
 			event.locals.user = user;
 			event.locals.session = session;
+
+			// Refresh session on activity (extends TTL)
+			// Only refresh if session is older than 1 hour to avoid excessive KV writes
+			const sessionAge = Date.now() - new Date(session.expires_at).getTime() + (7 * 24 * 60 * 60 * 1000);
+			if (sessionAge > 60 * 60 * 1000) {
+				// Fire and forget - don't block the request
+				refreshSession(KV, sessionId).catch(() => {
+					// Ignore refresh errors
+				});
+			}
 		}
 	}
 
@@ -117,5 +147,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 		});
 	}
 
-	return resolve(event);
+	// Resolve the request and add security headers to response
+	const response = await resolve(event);
+
+	// Add security headers to all responses
+	const newHeaders = new Headers(response.headers);
+	for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+		newHeaders.set(key, value);
+	}
+
+	// Add HSTS header for HTTPS requests
+	if (event.url.protocol === 'https:') {
+		newHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+	}
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: newHeaders
+	});
 };

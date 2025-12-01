@@ -2,11 +2,12 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
-	getOAuthState,
+	getOAuthStateWithPKCE,
 	exchangeGoogleCode,
 	getGoogleUserInfo,
 	handleOAuthCallback,
-	createSessionCookie
+	createSessionCookie,
+	validateRedirectUrl
 } from '$lib/server/auth';
 import { createResendClient, sendWelcomeEmail } from '$lib/server/email';
 import { trackEvent } from '$lib/server/db';
@@ -23,26 +24,32 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	const state = url.searchParams.get('state');
 	const error = url.searchParams.get('error');
 
-	// Handle OAuth errors
+	// Handle OAuth errors - use generic message to prevent info leakage
 	if (error) {
 		console.error('OAuth error:', error);
-		throw redirect(302, `/auth/login?error=${encodeURIComponent(error)}`);
+		throw redirect(302, '/auth/login?error=auth_failed');
 	}
 
 	if (!code || !state) {
 		throw redirect(302, '/auth/login?error=missing_params');
 	}
 
-	// Verify state (CSRF protection)
-	const oauthState = await getOAuthState(KV, state);
+	// Verify state (CSRF protection) and get PKCE verifier
+	const oauthState = await getOAuthStateWithPKCE(KV, state);
 	if (!oauthState) {
 		throw redirect(302, '/auth/login?error=invalid_state');
 	}
 
 	try {
-		// Exchange code for tokens
+		// Exchange code for tokens (with PKCE verifier)
 		const redirectUri = `${SITE_URL}/api/auth/callback`;
-		const tokens = await exchangeGoogleCode(code, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
+		const tokens = await exchangeGoogleCode(
+			code,
+			GOOGLE_CLIENT_ID,
+			GOOGLE_CLIENT_SECRET,
+			redirectUri,
+			oauthState.code_verifier
+		);
 
 		// Get user info
 		const userInfo = await getGoogleUserInfo(tokens.access_token);
@@ -78,13 +85,15 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 					name: userInfo.name?.split(' ')[0] // First name only
 				});
 			} catch (emailError) {
-				console.error('Failed to send welcome email:', emailError);
+				// Log without exposing error details
+				console.error('Failed to send welcome email');
 				// Don't fail the auth flow if email fails
 			}
 		}
 
 		// Redirect to original destination or profile setup for new users
-		const redirectTo = isNewUser ? '/profile' : oauthState.redirect_to;
+		// Double-validate redirect URL for defense in depth
+		const redirectTo = isNewUser ? '/profile' : validateRedirectUrl(oauthState.redirect_to);
 
 		return new Response(null, {
 			status: 302,
@@ -94,7 +103,8 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 			}
 		});
 	} catch (err) {
-		console.error('OAuth callback error:', err);
+		// Log error without exposing details to client
+		console.error('OAuth callback error');
 		throw redirect(302, '/auth/login?error=auth_failed');
 	}
 };
