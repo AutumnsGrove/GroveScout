@@ -45,7 +45,7 @@
 </svelte:head>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="app" onclick={closeMenus}>
+<div class="app" onclick={closeMenus} role="presentation">
 	<header>
 		<nav>
 			<a href="/" class="logo">

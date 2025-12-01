@@ -7,29 +7,29 @@ compatibility_flags = ["nodejs_compat"]
 
 # Main entry point (SvelteKit handles this)
 main = ".svelte-kit/cloudflare/_worker.js"
-assets = { directory = ".svelte-kit/cloudflare" }
+assets = { directory = ".svelte-kit/cloudflare", binding = "ASSETS" }
 
 # D1 Database
 [[d1_databases]]
 binding = "DB"
 database_name = "scout-db"
-database_id = "placeholder-create-with-wrangler" # Run: npx wrangler d1 create scout-db
+database_id = "6a289378-c662-4c6a-9f1b-fa5296e03fa2" # Run: npx wrangler d1 create scout-db
 
 # KV Namespace for caching and sessions
 [[kv_namespaces]]
 binding = "KV"
-id = "placeholder-create-with-wrangler" # Run: npx wrangler kv:namespace create SCOUT_CACHE
+id = "31eb5622c7fd41ec8fc8c8f939f5099b" # Run: npx wrangler kv:namespace create SCOUT_CACHE
 
-# Queue for async search jobs
-[[queues.producers]]
-queue = "scout-search-jobs"
-binding = "SEARCH_QUEUE"
+# Queue for async search jobs (requires paid plan)
+# [[queues.producers]]
+# queue = "scout-search-jobs"
+# binding = "SEARCH_QUEUE"
 
 # Queue consumer (separate worker, defined below)
-[[queues.consumers]]
-queue = "scout-search-jobs"
-max_batch_size = 1
-max_retries = 3
+# [[queues.consumers]]
+# queue = "scout-search-jobs"
+# max_batch_size = 1
+# max_retries = 3
 
 # Environment variables (secrets set via wrangler secret put)
 # ANTHROPIC_API_KEY - Claude API key

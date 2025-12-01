@@ -3,6 +3,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { createApiKey, getApiKeys, deleteApiKey } from '$lib/server/db';
+import { verifyApiKey } from '$lib/server/auth';
 
 // Input validation schemas
 const CreateApiKeySchema = z.object({
@@ -38,27 +39,6 @@ async function generateApiKey(): Promise<{ key: string; prefix: string; hash: st
 		.join('');
 
 	return { key, prefix, hash };
-}
-
-/**
- * Verify an API key against stored hash
- */
-export async function verifyApiKey(key: string, storedHash: string): Promise<boolean> {
-	const encoder = new TextEncoder();
-	const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(key));
-	const hashArray = new Uint8Array(hashBuffer);
-	const computedHash = Array.from(hashArray)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-
-	// Constant-time comparison to prevent timing attacks
-	if (computedHash.length !== storedHash.length) return false;
-
-	let result = 0;
-	for (let i = 0; i < computedHash.length; i++) {
-		result |= computedHash.charCodeAt(i) ^ storedHash.charCodeAt(i);
-	}
-	return result === 0;
 }
 
 export const GET: RequestHandler = async ({ locals, platform }) => {

@@ -198,9 +198,9 @@
 
 {#if showDeleteConfirm}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={() => (showDeleteConfirm = false)}>
+	<div class="modal-overlay" onclick={() => (showDeleteConfirm = false)} role="presentation">
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
+		<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
 			<h2>Delete Account</h2>
 			<p class="modal-warning">
 				This action is <strong>permanent</strong> and cannot be undone. All your data including searches, credits, and preferences will be permanently deleted.

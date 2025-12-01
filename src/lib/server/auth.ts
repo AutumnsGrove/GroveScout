@@ -31,6 +31,27 @@ const APPLE_KEYS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 // ============================================================================
 
 /**
+ * Verify an API key against stored hash
+ */
+export async function verifyApiKey(key: string, storedHash: string): Promise<boolean> {
+	const encoder = new TextEncoder();
+	const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(key));
+	const hashArray = new Uint8Array(hashBuffer);
+	const computedHash = Array.from(hashArray)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
+
+	// Constant-time comparison to prevent timing attacks
+	if (computedHash.length !== storedHash.length) return false;
+
+	let result = 0;
+	for (let i = 0; i < computedHash.length; i++) {
+		result |= computedHash.charCodeAt(i) ^ storedHash.charCodeAt(i);
+	}
+	return result === 0;
+}
+
+/**
  * Validate redirect URL to prevent open redirect attacks
  * Only allows relative paths starting with /
  */
