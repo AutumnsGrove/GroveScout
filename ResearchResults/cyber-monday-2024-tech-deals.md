@@ -1,7 +1,40 @@
+---
+title: "Cyber Monday 2024 - Tech Gadget Deals"
+date: 2024-12-01
+event: "Cyber Monday 2024"
+status: "archived"
+researcher: "Scout AI"
+tags:
+  - deals
+  - cyber-monday
+  - tech
+  - headphones
+  - earbuds
+  - smartwatch
+  - tablets
+  - smart-home
+  - gaming
+  - retro-gaming
+  - portable-audio
+categories:
+  - consumer-electronics
+  - wearables
+  - audio
+  - gaming-hardware
+retailers:
+  - amazon
+  - best-buy
+  - walmart
+  - newegg
+  - anbernic
+  - goretroid
+---
+
 # Cyber Monday 2024 - Tech Gadget Deals
 
-> Research compiled: December 1, 2024
-> Status: Live deals (check retailer sites for current availability)
+> **Research Date:** December 1, 2024
+> **Event:** Cyber Monday 2024
+> **Status:** Archived (deals may have expired)
 
 ---
 
@@ -15,12 +48,13 @@
 | Sony WH-1000XM4 | $198 | 43% off | Amazon |
 | iPad 9th Gen | $199 | $129 off | Best Buy |
 | Fire TV Stick 4K | $22 | $28 off | Amazon |
+| Retroid Pocket 5 | $219 | - | GoRetroid |
 
 ---
 
 ## Headphones & Earbuds
 
-### Premium Noise-Cancelling
+### Premium Noise-Cancelling (Wireless)
 
 | Product | Current Price | Original | Discount | Notes |
 |---------|--------------|----------|----------|-------|
@@ -32,7 +66,7 @@
 | **Bose QuietComfort Ultra Headphones** | $329 | $429 | 23% off | Premium ANC |
 | **Sennheiser Momentum 4** | - | - | 39% off | Audiophile favorite |
 
-### Budget-Friendly Options
+### Budget Wireless Earbuds
 
 | Product | Current Price | Original | Discount |
 |---------|--------------|----------|----------|
@@ -41,8 +75,123 @@
 | **Samsung Galaxy Buds FE** | - | - | 42% off |
 | **Samsung Galaxy Buds 2 Pro** | - | - | 53% off |
 | **Google Pixel Buds Pro 2** | - | - | $50 off |
+| **Nothing Ear (a)** | $69 | $99 | 30% off |
+| **EarFun Air Pro 3** | Lowest-ever | - | Great budget ANC |
+| **Sony WF-C510** | ~$50 | $55 | Lowest price ever |
 
-**Sources:** [CNN Underscored](https://amp.cnn.com/cnn/cnn-underscored/deals/cyber-monday-headphone-earbud-deals-2024), [Best Buy](https://www.bestbuy.com/site/promo/cyber-monday-headphone-speaker-deals-1), [Rolling Stone](https://www.rollingstone.com/product-recommendations/electronics/best-black-friday-headphone-deals-2024-1235155607/)
+### Wired Headphones & Earbuds (3.5mm Jack)
+
+*Perfect for portable CD players, older devices, and audiophile listening.*
+
+#### Budget Wired (Under $15)
+
+| Product | Price | Notes |
+|---------|-------|-------|
+| **Panasonic ErgoFit RP-HJE120** | ~$9 | Classic, reliable, comfortable fit |
+| **Moondrop Quarks** | ~$13 | Surprisingly good audio for price |
+| **Apple EarPods (3.5mm)** | ~$15 | Widely available, decent quality |
+
+#### Best Value Wired ($15-30)
+
+| Product | Price | Notes |
+|---------|-------|-------|
+| **Moondrop Chu II** | ~$20 | Audiophile entry-level IEM, zinc alloy build |
+| **Linsoul KZ ZSN Pro X** | ~$25 | Expansive, layered sound |
+| **Symphonized NRG 3.0** | ~$25 | Wood construction, warm bass |
+| **Linsoul KZ ZS10 Pro** | ~$35 | Strong bass, 5 drivers per side |
+
+#### Audiophile Wired ($40+)
+
+| Product | Price | Notes |
+|---------|-------|-------|
+| **TIN HiFi T2** | ~$40 | Replaceable cable, excellent frequency response |
+| **Sennheiser IE 200** | ~$100+ | Entry-level audiophile, secure fit |
+| **Focal Elegia** | £329 | Was £849 - Premium closed-back |
+
+**Sources:** [CNN Underscored](https://amp.cnn.com/cnn/cnn-underscored/deals/cyber-monday-headphone-earbud-deals-2024), [Best Buy](https://www.bestbuy.com/site/promo/cyber-monday-headphone-speaker-deals-1), [SoundGuys](https://www.soundguys.com/best-wired-earbuds-under-20-10059/), [TechRadar](https://www.techradar.com/audio/headphones/earbuds-airpods/best-wired-earbuds)
+
+---
+
+## Portable CD Players (Modern Discman/Walkman)
+
+*The retro CD player market has made a comeback with modern features.*
+
+### Premium Players
+
+| Product | Price | Key Features |
+|---------|-------|--------------|
+| **FiiO DM13** | ~$200 | Metal build, Bluetooth, dual Cirrus Logic DACs, OLED screen, 10hr battery |
+| **Moondrop DiscDream** | ~$250+ | Designed by ex-Sony Discman engineer, SD card slot for digital files |
+
+### Budget & Mid-Range
+
+| Product | Where to Buy | Notes |
+|---------|--------------|-------|
+| **Nomad Transparent (2024)** | Newegg | Includes headphones, FM Radio, Bluetooth |
+| **Yintiny Rechargeable** | Amazon | Leather design, built-in speakers, Bluetooth |
+| **syitren R300** | Amazon | Desktop/portable, retro aesthetic |
+
+### Vintage Options
+
+| Source | Notes |
+|--------|-------|
+| **eBay** | Vintage Sony Discmans, free shipping on many |
+| **Retrospekt** | Refurbished retro tech specialists |
+
+**Recommendation:** The **FiiO DM13** (~$200) is the enthusiast pick with metal build and great DACs. For budget, check Amazon's portable CD player bestsellers.
+
+**Sources:** [Tom's Guide](https://www.tomsguide.com/audio/im-bringing-cds-back-with-this-portable-cd-player-with-built-in-bluetooth), [TechRadar](https://www.techradar.com/audio/portable-media-players/first-we-had-the-walkman-for-audiophiles-now-its-the-discman-portable-cd-players-turn)
+
+---
+
+## Retro Gaming Handhelds (Emulator Consoles)
+
+*PSP-style horizontal handhelds for retro game emulation.*
+
+### Top Tier (PS2/GameCube Capable)
+
+| Device | Price | Screen | Key Specs |
+|--------|-------|--------|-----------|
+| **Retroid Pocket 5** | $219 | 5.5" 1080p AMOLED | Snapdragon 865, 8GB RAM - "The GOAT" |
+| **Anbernic RG556** | $185 | 5.4" AMOLED | Unisoc T820, 8GB RAM, PS2 capable |
+
+### Mid-Range (PSP/Dreamcast/Some GameCube)
+
+| Device | Price | Screen | Notes |
+|--------|-------|--------|-------|
+| **Retroid Pocket 3+** | ~$150 | 4.7" widescreen | Great PSP performance, Android |
+| **Retroid Pocket 2S** | ~$100 | - | Dreamcast/GameCube/PSP capable |
+| **Anbernic RG40XX H** | ~$70 | Horizontal | N64/PS1/some PSP games |
+
+### Budget (PS1 and Below)
+
+| Device | Price | Notes |
+|--------|-------|-------|
+| **Anbernic RG35XX Plus** | ~$65 | Great for PS1 and below, Game Boy style |
+| **R36S (clone)** | ~$40 | 8/16-bit, PS1, some PSP/Dreamcast |
+| **TrimUI Smart Pro** | ~$60 | Good budget alternative |
+
+### PSP-Specific Form Factor
+
+| Device | Notes |
+|--------|-------|
+| **Anbernic RG Slide** | PSP Go-style slide-up screen, runs Android |
+| **Retroid Pocket 5** | Horizontal layout similar to PSP, premium build |
+| **Retroid Pocket 3+** | Widescreen, great for PSP games specifically |
+
+### Where to Buy
+
+| Retailer | Notes |
+|----------|-------|
+| **[Anbernic Official](https://anbernic.com)** | Direct from manufacturer |
+| **[GoRetroid](https://www.goretroid.com)** | Retroid Pocket devices |
+| **[Mechdiy](https://mechdiy.com)** | US seller, often pre-configured |
+| **[LITNXT](https://www.litnxt.com)** | US seller, custom firmware options |
+| **AliExpress** | Cheapest, but longer shipping + potential tariffs |
+
+**Recommendation:** For PSP lovers, the **Retroid Pocket 5** ($219) is the gold standard. Budget pick: **Anbernic RG40XX H** (~$70) for horizontal layout with N64/PS1/some PSP support.
+
+**Sources:** [RetroDodo](https://retrododo.com/best-retro-handhelds/), [Dexerto](https://www.dexerto.com/tech/best-retro-handheld-consoles-2585983/), [Retro Game Corps](https://retrogamecorps.com/), [Stuff](https://www.stuff.tv/features/best-retro-handhelds-emulate-classic-console-and-computer-games/)
 
 ---
 
@@ -231,15 +380,20 @@
 
 ---
 
-## Top Retailers for Cyber Monday Tech
+## Top Retailers
 
-- [Amazon](https://amazon.com) - Widest selection, fast shipping
-- [Best Buy](https://bestbuy.com) - Price matching, in-store pickup
-- [Walmart](https://walmart.com) - Competitive pricing
-- [Newegg](https://newegg.com) - PC components, gaming gear
-- [Slickdeals](https://slickdeals.net) - Community-curated deals
+| Retailer | Best For |
+|----------|----------|
+| [Amazon](https://amazon.com) | Widest selection, fast shipping |
+| [Best Buy](https://bestbuy.com) | Price matching, in-store pickup |
+| [Walmart](https://walmart.com) | Competitive pricing |
+| [Newegg](https://newegg.com) | PC components, gaming gear |
+| [Slickdeals](https://slickdeals.net) | Community-curated deals |
+| [Anbernic](https://anbernic.com) | Retro handhelds direct |
+| [GoRetroid](https://goretroid.com) | Retroid Pocket devices |
 
 ---
 
 *Research conducted using Scout deal-finding methodology*
 *Prices and availability subject to change*
+*Last updated: 2024-12-01*
