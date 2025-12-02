@@ -229,7 +229,13 @@ export async function updateSearchStatus(
 	db: D1Database,
 	id: string,
 	status: Search['status'],
-	extra?: { error_message?: string; credits_used?: number }
+	extra?: {
+		error_message?: string;
+		credits_used?: number;
+		tokens_input?: number;
+		tokens_output?: number;
+		api_calls_count?: number;
+	}
 ): Promise<void> {
 	const timestamp = now();
 	let startedAt = null;
@@ -248,10 +254,23 @@ export async function updateSearchStatus(
            started_at = COALESCE(?, started_at),
            completed_at = COALESCE(?, completed_at),
            error_message = COALESCE(?, error_message),
-           credits_used = COALESCE(?, credits_used)
+           credits_used = COALESCE(?, credits_used),
+           tokens_input = COALESCE(?, tokens_input),
+           tokens_output = COALESCE(?, tokens_output),
+           api_calls_count = COALESCE(?, api_calls_count)
        WHERE id = ?`
 		)
-		.bind(status, startedAt, completedAt, extra?.error_message ?? null, extra?.credits_used ?? null, id)
+		.bind(
+			status,
+			startedAt,
+			completedAt,
+			extra?.error_message ?? null,
+			extra?.credits_used ?? null,
+			extra?.tokens_input ?? null,
+			extra?.tokens_output ?? null,
+			extra?.api_calls_count ?? null,
+			id
+		)
 		.run();
 }
 

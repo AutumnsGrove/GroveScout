@@ -46,3 +46,17 @@ export interface BraveSearchResponse {
 		results: BraveSearchResult[];
 	};
 }
+
+// Token usage tracking from Anthropic API
+export interface TokenUsage {
+	input_tokens: number;
+	output_tokens: number;
+	api_calls: number;
+}
+
+// Result from runSearchOrchestrator including token usage
+export interface OrchestratorResult {
+	raw: SavedProduct[];
+	curated: SavedProduct[];
+	usage: TokenUsage;
+}

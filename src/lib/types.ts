@@ -58,6 +58,10 @@ export interface Search {
 	created_at: string;
 	started_at: string | null;
 	completed_at: string | null;
+	// Token tracking for AI model usage
+	tokens_input: number;
+	tokens_output: number;
+	api_calls_count: number;
 }
 
 export type SearchStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_confirmation';

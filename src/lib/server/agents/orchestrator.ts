@@ -210,11 +210,22 @@ Extract all products that match the criteria. Output each product as a JSON obje
 		]
 	});
 
+	// Track token usage from orchestrator call
+	const orchestratorUsage = orchestratorResponse.usage;
+
 	// Parse products from response
 	const rawProducts = parseProductsFromResponse(orchestratorResponse);
 
 	if (rawProducts.length === 0) {
-		return { raw: [], curated: [] };
+		return {
+			raw: [],
+			curated: [],
+			usage: {
+				input_tokens: orchestratorUsage.input_tokens,
+				output_tokens: orchestratorUsage.output_tokens,
+				api_calls: 1
+			}
+		};
 	}
 
 	// Run curator to select top 5
@@ -240,11 +251,22 @@ Select the 5 best products and add match_score and match_reason to each. Output 
 		]
 	});
 
+	// Track token usage from curator call
+	const curatorUsage = curatorResponse.usage;
+
 	const curatedProducts = parseCuratedProducts(curatorResponse);
+
+	// Calculate total token usage across both API calls
+	const totalUsage = {
+		input_tokens: orchestratorUsage.input_tokens + curatorUsage.input_tokens,
+		output_tokens: orchestratorUsage.output_tokens + curatorUsage.output_tokens,
+		api_calls: 2
+	};
 
 	return {
 		raw: rawProducts,
-		curated: curatedProducts
+		curated: curatedProducts,
+		usage: totalUsage
 	};
 }
 

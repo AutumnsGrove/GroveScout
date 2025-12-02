@@ -44,7 +44,11 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 			error_message: search.error_message,
 			credits_used: search.credits_used,
 			created_at: search.created_at,
-			completed_at: search.completed_at
+			completed_at: search.completed_at,
+			// Token usage tracking
+			tokens_input: search.tokens_input,
+			tokens_output: search.tokens_output,
+			api_calls_count: search.api_calls_count
 		},
 		results,
 		shareToken

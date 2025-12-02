@@ -44,6 +44,15 @@
 		const remainingSeconds = seconds % 60;
 		return `${minutes}m ${remainingSeconds}s`;
 	}
+
+	function formatTokens(count: number): string {
+		if (count >= 1000) {
+			return `${(count / 1000).toFixed(1)}k`;
+		}
+		return count.toString();
+	}
+
+	const totalTokens = $derived((data.search.tokens_input || 0) + (data.search.tokens_output || 0));
 </script>
 
 <svelte:head>
@@ -116,9 +125,14 @@
 				<Icons name="x" size="xl" class="text-red-500" />
 			</div>
 			<h2 class="text-heading-lg text-bark dark:text-cream mb-2">Search Failed</h2>
-			<p class="text-bark-500 dark:text-cream-500 max-w-md mx-auto mb-6">
+			<p class="text-bark-500 dark:text-cream-500 max-w-md mx-auto mb-4">
 				{data.search.error_message || 'Something went wrong. No credits were charged.'}
 			</p>
+			{#if totalTokens > 0}
+				<p class="text-sm text-bark-400 dark:text-cream-500 mb-6">
+					AI tokens used: {formatTokens(totalTokens)} ({data.search.api_calls_count || 0} API calls)
+				</p>
+			{/if}
 			<a href="/search/new" class="scout-btn-primary">
 				<Icons name="refresh" size="sm" />
 				Try Again
@@ -157,7 +171,7 @@
 
 		<!-- Results Footer -->
 		<footer class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-cream-300 dark:border-bark-600 text-sm text-bark-400 dark:text-cream-500">
-			<div class="flex items-center gap-4">
+			<div class="flex flex-wrap items-center gap-4">
 				<span class="flex items-center gap-1">
 					<Icons name="clock" size="sm" />
 					Completed in {getSearchDuration(data.search.created_at, data.search.completed_at)}
@@ -166,6 +180,12 @@
 					<Icons name="credits" size="sm" />
 					Used {data.search.credits_used} credit{data.search.credits_used !== 1 ? 's' : ''}
 				</span>
+				{#if totalTokens > 0}
+					<span class="flex items-center gap-1" title="Input: {formatTokens(data.search.tokens_input || 0)} | Output: {formatTokens(data.search.tokens_output || 0)}">
+						<Icons name="sparkles" size="sm" />
+						{formatTokens(totalTokens)} tokens ({data.search.api_calls_count || 0} API calls)
+					</span>
+				{/if}
 			</div>
 			<a href="/search/new" class="text-grove-600 dark:text-grove-400 hover:underline flex items-center gap-1">
 				<Icons name="sparkles" size="sm" />

@@ -42,16 +42,19 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 		};
 
 		// Run the search agents
-		const { raw, curated } = await runSearchOrchestrator(
+		const { raw, curated, usage } = await runSearchOrchestrator(
 			env.ANTHROPIC_API_KEY,
 			env.BRAVE_API_KEY,
 			searchContext
 		);
 
 		if (curated.length === 0) {
-			// No results found
+			// No results found - still track token usage
 			await updateSearchStatus(env.DB, search_id, 'failed', {
-				error_message: 'No matching products found. Try broadening your search criteria.'
+				error_message: 'No matching products found. Try broadening your search criteria.',
+				tokens_input: usage.input_tokens,
+				tokens_output: usage.output_tokens,
+				api_calls_count: usage.api_calls
 			});
 			return;
 		}
@@ -93,16 +96,22 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 			note: `Search: "${(query_freeform || '').slice(0, 50)}..."`
 		});
 
-		// Update status to completed
+		// Update status to completed with token usage
 		await updateSearchStatus(env.DB, search_id, 'completed', {
-			credits_used: 1
+			credits_used: 1,
+			tokens_input: usage.input_tokens,
+			tokens_output: usage.output_tokens,
+			api_calls_count: usage.api_calls
 		});
 
-		// Track search completed
+		// Track search completed with token usage
 		await trackEvent(env.DB, 'search_completed', job.user_id, {
 			search_id,
 			result_count: curated.length,
-			raw_count: raw.length
+			raw_count: raw.length,
+			tokens_input: usage.input_tokens,
+			tokens_output: usage.output_tokens,
+			api_calls: usage.api_calls
 		});
 
 		console.log(`[Scout] Search ${search_id} completed with ${curated.length} results`);
