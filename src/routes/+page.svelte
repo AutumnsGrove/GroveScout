@@ -135,7 +135,7 @@
 		<div class="scout-container">
 			<div class="max-w-3xl mx-auto">
 				<h2 class="text-display-sm text-bark dark:text-cream text-center mb-12">
-					Built for overwhelmed shoppers
+					<a href="https://github.com/AutumnsGrove/GroveScout" target="_blank" rel="noopener noreferrer" class="hover:text-grove transition-colors">Built</a> for overwhelmed shoppers
 				</h2>
 
 				<div class="space-y-4">
