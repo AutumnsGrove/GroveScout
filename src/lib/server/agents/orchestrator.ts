@@ -4,6 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { braveSearch, buildSearchQueries } from './brave';
 import type { SavedProduct, SearchContext } from './types';
+import { AGENT_CONFIG } from './config';
 
 // Known safe retail domains (partial list - expand as needed)
 const KNOWN_SAFE_DOMAINS = new Set([
@@ -189,8 +190,8 @@ export async function runSearchOrchestrator(
 
 	// Run orchestrator to extract products
 	const orchestratorResponse = await anthropic.messages.create({
-		model: 'claude-sonnet-4-20250514',
-		max_tokens: 4000,
+		model: AGENT_CONFIG.model.primary,
+		max_tokens: AGENT_CONFIG.model.orchestratorMaxTokens,
 		system: ORCHESTRATOR_SYSTEM_PROMPT,
 		messages: [
 			{
@@ -230,8 +231,8 @@ Extract all products that match the criteria. Output each product as a JSON obje
 
 	// Run curator to select top 5
 	const curatorResponse = await anthropic.messages.create({
-		model: 'claude-sonnet-4-20250514',
-		max_tokens: 2000,
+		model: AGENT_CONFIG.model.primary,
+		max_tokens: AGENT_CONFIG.model.curatorMaxTokens,
 		system: CURATOR_SYSTEM_PROMPT,
 		messages: [
 			{
