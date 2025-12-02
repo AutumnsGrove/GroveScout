@@ -127,9 +127,12 @@ You analyze search results and extract product information. For each promising p
   "confidence": 85  // 0-100 how well it matches the criteria
 }
 
-Rules:
-- Only include products that genuinely match the search criteria
+CRITICAL RULES:
+- **URL MUST come EXACTLY from the search results** - NEVER make up or guess URLs
+- If you don't see a direct product URL in the search results, skip that product
+- Only use URLs that appear in the "URL:" field of the search results provided
 - Price must be in CENTS (e.g., $49.99 = 4999)
+- Only include products that genuinely match the search criteria
 - Confidence should reflect how well the product matches (price range, requirements, style)
 - Skip products that are out of stock, expired deals, or from sketchy retailers
 - Aim for 15-25 quality results`;
