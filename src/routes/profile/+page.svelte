@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { Icons } from '$lib/components/scout';
 
 	let { data } = $props();
 
@@ -71,235 +71,174 @@
 	}
 </script>
 
-<div class="profile-page">
-	<header>
-		<h1>Your Profile</h1>
-		<p class="subtitle">Help Scout find better deals by telling us about your preferences.</p>
+<svelte:head>
+	<title>Profile - Scout</title>
+</svelte:head>
+
+<div class="scout-container py-8 max-w-2xl">
+	<!-- Header -->
+	<header class="mb-8">
+		<a href="/dashboard" class="inline-flex items-center gap-1 text-sm text-grove-600 dark:text-grove-400 hover:underline mb-4">
+			<Icons name="arrow-right" size="sm" class="rotate-180" />
+			Back to dashboard
+		</a>
+		<h1 class="text-display-sm text-bark dark:text-cream mb-2">Your Profile</h1>
+		<p class="text-bark-500 dark:text-cream-500">Help Scout find better deals by telling us about your preferences.</p>
 	</header>
 
-	<form onsubmit={handleSubmit}>
-		<section class="form-section">
-			<h2>Basic Info</h2>
-			<div class="form-group">
-				<label for="displayName">Display Name</label>
-				<input type="text" id="displayName" bind:value={displayName} placeholder="How should we call you?" />
+	<form onsubmit={handleSubmit} class="space-y-8">
+		<!-- Basic Info -->
+		<section class="scout-card p-6">
+			<div class="flex items-center gap-3 mb-4">
+				<div class="w-10 h-10 bg-grove-100 dark:bg-grove-900/30 rounded-full flex items-center justify-center">
+					<Icons name="user" size="md" class="text-grove-600 dark:text-grove-400" />
+				</div>
+				<h2 class="text-heading text-bark dark:text-cream">Basic Info</h2>
+			</div>
+			<div>
+				<label for="displayName" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Display Name</label>
+				<input type="text" id="displayName" bind:value={displayName} placeholder="How should we call you?" class="scout-input" />
 			</div>
 		</section>
 
-		<section class="form-section">
-			<h2>Sizes</h2>
-			<p class="section-hint">These help us filter results to your fit.</p>
-			<div class="form-row">
-				<div class="form-group">
-					<label for="shirtSize">Shirt/Top</label>
-					<input type="text" id="shirtSize" bind:value={shirtSize} placeholder="e.g., M, L, XL" />
+		<!-- Sizes -->
+		<section class="scout-card p-6">
+			<div class="flex items-center gap-3 mb-2">
+				<div class="w-10 h-10 bg-scout-100 dark:bg-scout-900/30 rounded-full flex items-center justify-center">
+					<Icons name="star" size="md" class="text-scout-600 dark:text-scout-400" />
 				</div>
-				<div class="form-group">
-					<label for="pantsSize">Pants</label>
-					<input type="text" id="pantsSize" bind:value={pantsSize} placeholder="e.g., 32x30" />
-				</div>
-				<div class="form-group">
-					<label for="shoeSize">Shoes</label>
-					<input type="text" id="shoeSize" bind:value={shoeSize} placeholder="e.g., 10.5 US" />
-				</div>
+				<h2 class="text-heading text-bark dark:text-cream">Sizes</h2>
 			</div>
-		</section>
-
-		<section class="form-section">
-			<h2>Color Preferences</h2>
-			<div class="form-group">
-				<label for="colorFavorites">Favorite Colors</label>
-				<input type="text" id="colorFavorites" bind:value={colorFavorites} placeholder="e.g., blue, earth tones, forest green" />
-				<span class="hint">Comma separated</span>
-			</div>
-			<div class="form-group">
-				<label for="colorAvoid">Colors to Avoid</label>
-				<input type="text" id="colorAvoid" bind:value={colorAvoid} placeholder="e.g., neon, hot pink" />
-				<span class="hint">Comma separated</span>
-			</div>
-		</section>
-
-		<section class="form-section">
-			<h2>Budget</h2>
-			<p class="section-hint">Default price range for your searches.</p>
-			<div class="form-row">
-				<div class="form-group">
-					<label for="budgetMin">Minimum ($)</label>
-					<input type="number" id="budgetMin" bind:value={budgetMin} min="0" step="1" placeholder="0" />
+			<p class="text-sm text-bark-400 dark:text-cream-500 mb-4 ml-13">These help us filter results to your fit.</p>
+			<div class="grid sm:grid-cols-3 gap-4">
+				<div>
+					<label for="shirtSize" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Shirt/Top</label>
+					<input type="text" id="shirtSize" bind:value={shirtSize} placeholder="e.g., M, L, XL" class="scout-input" />
 				</div>
-				<div class="form-group">
-					<label for="budgetMax">Maximum ($)</label>
-					<input type="number" id="budgetMax" bind:value={budgetMax} min="0" step="1" placeholder="100" />
+				<div>
+					<label for="pantsSize" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Pants</label>
+					<input type="text" id="pantsSize" bind:value={pantsSize} placeholder="e.g., 32x30" class="scout-input" />
+				</div>
+				<div>
+					<label for="shoeSize" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Shoes</label>
+					<input type="text" id="shoeSize" bind:value={shoeSize} placeholder="e.g., 10.5 US" class="scout-input" />
 				</div>
 			</div>
 		</section>
 
-		<section class="form-section">
-			<h2>Retailers</h2>
-			<div class="form-group">
-				<label for="favoriteRetailers">Favorite Retailers</label>
-				<input type="text" id="favoriteRetailers" bind:value={favoriteRetailers} placeholder="e.g., rei.com, amazon.com" />
-				<span class="hint">We'll prioritize these stores. Comma separated.</span>
+		<!-- Color Preferences -->
+		<section class="scout-card p-6">
+			<div class="flex items-center gap-3 mb-4">
+				<div class="w-10 h-10 bg-pink-100 dark:bg-pink-900/30 rounded-full flex items-center justify-center">
+					<Icons name="heart" size="md" class="text-pink-600 dark:text-pink-400" />
+				</div>
+				<h2 class="text-heading text-bark dark:text-cream">Color Preferences</h2>
 			</div>
-			<div class="form-group">
-				<label for="excludedRetailers">Retailers to Exclude</label>
-				<input type="text" id="excludedRetailers" bind:value={excludedRetailers} placeholder="e.g., wish.com" />
-				<span class="hint">We'll skip these entirely. Comma separated.</span>
+			<div class="space-y-4">
+				<div>
+					<label for="colorFavorites" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Favorite Colors</label>
+					<input type="text" id="colorFavorites" bind:value={colorFavorites} placeholder="e.g., blue, earth tones, forest green" class="scout-input" />
+					<span class="text-xs text-bark-400 dark:text-cream-500 mt-1 block">Comma separated</span>
+				</div>
+				<div>
+					<label for="colorAvoid" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Colors to Avoid</label>
+					<input type="text" id="colorAvoid" bind:value={colorAvoid} placeholder="e.g., neon, hot pink" class="scout-input" />
+					<span class="text-xs text-bark-400 dark:text-cream-500 mt-1 block">Comma separated</span>
+				</div>
 			</div>
 		</section>
 
-		<section class="form-section">
-			<h2>Style Notes</h2>
-			<div class="form-group">
-				<label for="styleNotes">Describe Your Style</label>
-				<textarea id="styleNotes" bind:value={styleNotes} rows="4" placeholder="e.g., I prefer minimalist, earth-tone aesthetics. Comfort over fashion. I like outdoor/hiking gear even for everyday wear."></textarea>
-				<span class="hint">The more detail, the better Scout can match your vibe.</span>
+		<!-- Budget -->
+		<section class="scout-card p-6">
+			<div class="flex items-center gap-3 mb-2">
+				<div class="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+					<Icons name="credits" size="md" class="text-amber-600 dark:text-amber-400" />
+				</div>
+				<h2 class="text-heading text-bark dark:text-cream">Budget</h2>
+			</div>
+			<p class="text-sm text-bark-400 dark:text-cream-500 mb-4 ml-13">Default price range for your searches.</p>
+			<div class="grid sm:grid-cols-2 gap-4">
+				<div>
+					<label for="budgetMin" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Minimum ($)</label>
+					<input type="number" id="budgetMin" bind:value={budgetMin} min="0" step="1" placeholder="0" class="scout-input" />
+				</div>
+				<div>
+					<label for="budgetMax" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Maximum ($)</label>
+					<input type="number" id="budgetMax" bind:value={budgetMax} min="0" step="1" placeholder="100" class="scout-input" />
+				</div>
 			</div>
 		</section>
 
+		<!-- Retailers -->
+		<section class="scout-card p-6">
+			<div class="flex items-center gap-3 mb-4">
+				<div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+					<Icons name="shopping-bag" size="md" class="text-blue-600 dark:text-blue-400" />
+				</div>
+				<h2 class="text-heading text-bark dark:text-cream">Retailers</h2>
+			</div>
+			<div class="space-y-4">
+				<div>
+					<label for="favoriteRetailers" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Favorite Retailers</label>
+					<input type="text" id="favoriteRetailers" bind:value={favoriteRetailers} placeholder="e.g., rei.com, amazon.com" class="scout-input" />
+					<span class="text-xs text-bark-400 dark:text-cream-500 mt-1 block">We'll prioritize these stores. Comma separated.</span>
+				</div>
+				<div>
+					<label for="excludedRetailers" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Retailers to Exclude</label>
+					<input type="text" id="excludedRetailers" bind:value={excludedRetailers} placeholder="e.g., wish.com" class="scout-input" />
+					<span class="text-xs text-bark-400 dark:text-cream-500 mt-1 block">We'll skip these entirely. Comma separated.</span>
+				</div>
+			</div>
+		</section>
+
+		<!-- Style Notes -->
+		<section class="scout-card p-6">
+			<div class="flex items-center gap-3 mb-4">
+				<div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+					<Icons name="sparkles" size="md" class="text-purple-600 dark:text-purple-400" />
+				</div>
+				<h2 class="text-heading text-bark dark:text-cream">Style Notes</h2>
+			</div>
+			<div>
+				<label for="styleNotes" class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-1">Describe Your Style</label>
+				<textarea id="styleNotes" bind:value={styleNotes} rows="4" placeholder="e.g., I prefer minimalist, earth-tone aesthetics. Comfort over fashion. I like outdoor/hiking gear even for everyday wear." class="scout-input resize-y"></textarea>
+				<span class="text-xs text-bark-400 dark:text-cream-500 mt-1 block">The more detail, the better Scout can match your vibe.</span>
+			</div>
+		</section>
+
+		<!-- Alerts -->
 		{#if error}
-			<div class="alert error">{error}</div>
+			<div class="p-4 rounded-grove bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+				<div class="flex items-center gap-2 text-red-700 dark:text-red-300">
+					<Icons name="x" size="sm" />
+					<span>{error}</span>
+				</div>
+			</div>
 		{/if}
 
 		{#if success}
-			<div class="alert success">Profile saved!</div>
+			<div class="p-4 rounded-grove bg-grove-50 dark:bg-grove-900/20 border border-grove-200 dark:border-grove-800">
+				<div class="flex items-center gap-2 text-grove-700 dark:text-grove-300">
+					<Icons name="check" size="sm" />
+					<span>Profile saved successfully!</span>
+				</div>
+			</div>
 		{/if}
 
-		<div class="form-actions">
-			<button type="submit" disabled={isSaving}>
-				{isSaving ? 'Saving...' : 'Save Profile'}
+		<!-- Actions -->
+		<div class="flex items-center gap-4">
+			<button type="submit" disabled={isSaving} class="scout-btn-primary">
+				{#if isSaving}
+					<Icons name="loader" size="sm" class="animate-spin" />
+					Saving...
+				{:else}
+					<Icons name="check" size="sm" />
+					Save Profile
+				{/if}
 			</button>
-			<a href="/dashboard" class="btn-secondary">Back to Dashboard</a>
+			<a href="/dashboard" class="text-bark-500 dark:text-cream-500 hover:text-grove-600 dark:hover:text-grove-400 transition-colors">
+				Cancel
+			</a>
 		</div>
 	</form>
 </div>
-
-<style>
-	.profile-page {
-		max-width: 600px;
-		margin: 0 auto;
-	}
-
-	header {
-		margin-bottom: 2rem;
-	}
-
-	h1 {
-		margin-bottom: 0.5rem;
-	}
-
-	.subtitle {
-		color: #666;
-	}
-
-	.form-section {
-		margin-bottom: 2rem;
-		padding-bottom: 2rem;
-		border-bottom: 1px solid #e5e7eb;
-	}
-
-	.form-section h2 {
-		font-size: 1.125rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.section-hint {
-		color: #9ca3af;
-		font-size: 0.875rem;
-		margin-bottom: 1rem;
-	}
-
-	.form-group {
-		margin-bottom: 1rem;
-	}
-
-	.form-row {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-		gap: 1rem;
-	}
-
-	label {
-		display: block;
-		font-weight: 500;
-		margin-bottom: 0.375rem;
-		font-size: 0.875rem;
-	}
-
-	input, textarea {
-		width: 100%;
-		padding: 0.625rem 0.75rem;
-		border: 1px solid #d1d5db;
-		border-radius: 0.375rem;
-		font-size: 1rem;
-		font-family: inherit;
-	}
-
-	input:focus, textarea:focus {
-		outline: none;
-		border-color: #6366f1;
-		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-	}
-
-	textarea {
-		resize: vertical;
-	}
-
-	.hint {
-		display: block;
-		font-size: 0.75rem;
-		color: #9ca3af;
-		margin-top: 0.25rem;
-	}
-
-	.alert {
-		padding: 0.75rem 1rem;
-		border-radius: 0.375rem;
-		margin-bottom: 1rem;
-	}
-
-	.alert.error {
-		background: #fef2f2;
-		color: #991b1b;
-	}
-
-	.alert.success {
-		background: #f0fdf4;
-		color: #166534;
-	}
-
-	.form-actions {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	button[type="submit"] {
-		background: #6366f1;
-		color: white;
-		border: none;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	button[type="submit"]:hover:not(:disabled) {
-		background: #5558e3;
-	}
-
-	button[type="submit"]:disabled {
-		background: #9ca3af;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		color: #666;
-		text-decoration: none;
-	}
-
-	.btn-secondary:hover {
-		color: #6366f1;
-	}
-</style>

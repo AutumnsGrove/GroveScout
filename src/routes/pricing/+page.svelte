@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { Icons, PlanCard } from '$lib/components/scout';
 
 	let { data } = $props();
 
@@ -41,315 +42,155 @@
 		}
 	}
 
-	// These would come from your Stripe dashboard
-	// For now, placeholder IDs - replace with actual price IDs
 	const PRICE_IDS = {
-		basic: 'price_basic_monthly', // Replace with real ID
-		pro: 'price_pro_monthly', // Replace with real ID
-		credits: 'price_credit_pack' // Replace with real ID
+		basic: 'price_basic_monthly',
+		pro: 'price_pro_monthly',
+		credits: 'price_credit_pack'
 	};
+
+	const faqs = [
+		{ q: 'What counts as a search?', a: 'Each search request uses 1 credit. If we can\'t find results, you don\'t get charged.' },
+		{ q: 'Do credits roll over?', a: 'Subscription credits reset monthly. Credit pack purchases never expire.' },
+		{ q: 'Can I cancel anytime?', a: 'Yes! Cancel anytime from your settings. You\'ll keep access until your billing period ends.' },
+		{ q: 'What payment methods?', a: 'We accept all major credit cards through Stripe.' }
+	];
 </script>
 
-<div class="pricing-page">
-	<header>
-		<h1>Simple, transparent pricing</h1>
-		<p class="subtitle">Start finding deals without the cognitive overload.</p>
+<svelte:head>
+	<title>Pricing - Scout</title>
+</svelte:head>
+
+<div class="scout-container py-12">
+	<!-- Header -->
+	<header class="text-center max-w-2xl mx-auto mb-12">
+		<h1 class="text-display text-bark dark:text-cream mb-4">Simple, transparent pricing</h1>
+		<p class="text-body-lg text-bark-500 dark:text-cream-500">
+			Start finding deals without the cognitive overload.
+		</p>
 	</header>
 
+	<!-- Alerts -->
 	{#if cancelled}
-		<div class="alert info">
-			Checkout was cancelled. Feel free to try again when you're ready.
+		<div class="max-w-md mx-auto mb-8 p-4 rounded-grove bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+			<div class="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+				<Icons name="x" size="sm" />
+				<span>Checkout was cancelled. Feel free to try again when you're ready.</span>
+			</div>
 		</div>
 	{/if}
 
 	{#if error}
-		<div class="alert error">{error}</div>
+		<div class="max-w-md mx-auto mb-8 p-4 rounded-grove bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+			<div class="flex items-center gap-2 text-red-700 dark:text-red-300">
+				<Icons name="x" size="sm" />
+				<span>{error}</span>
+			</div>
+		</div>
 	{/if}
 
-	<div class="plans">
-		<div class="plan">
-			<div class="plan-header">
-				<h2>Basic</h2>
-				<div class="price">
-					<span class="amount">$10</span>
-					<span class="period">/month</span>
-				</div>
-			</div>
-			<ul class="features">
-				<li>50 searches per month</li>
-				<li>5 curated results per search</li>
-				<li>Shareable result links</li>
-				<li>Profile preferences</li>
-				<li>Email notifications</li>
-			</ul>
-			{#if data.user}
-				<button
-					class="btn-plan"
-					onclick={() => handleCheckout(PRICE_IDS.basic, 'subscription')}
-					disabled={isLoading !== null}
-				>
-					{isLoading === PRICE_IDS.basic ? 'Loading...' : 'Get Basic'}
-				</button>
-			{:else}
-				<a href="/auth/login?redirect=/pricing" class="btn-plan">Sign up</a>
-			{/if}
-		</div>
+	<!-- Plans Grid -->
+	<div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
+		<!-- Basic Plan -->
+		<PlanCard
+			name="Basic"
+			price={10}
+			searches={50}
+			features={[
+				'50 searches per month',
+				'5 curated results per search',
+				'Shareable result links',
+				'Profile preferences',
+				'Email notifications'
+			]}
+			priceId={PRICE_IDS.basic}
+			onselect={(id) => data.user ? handleCheckout(id, 'subscription') : window.location.href = `/auth/login?redirect=/pricing`}
+		/>
 
-		<div class="plan featured">
-			<div class="badge">Most Popular</div>
-			<div class="plan-header">
-				<h2>Pro</h2>
-				<div class="price">
-					<span class="amount">$25</span>
-					<span class="period">/month</span>
-				</div>
-			</div>
-			<ul class="features">
-				<li><strong>200 searches</strong> per month</li>
-				<li>5 curated results per search</li>
-				<li>Shareable result links</li>
-				<li>Profile preferences</li>
-				<li>Email notifications</li>
-				<li>Priority processing</li>
-			</ul>
-			{#if data.user}
-				<button
-					class="btn-plan primary"
-					onclick={() => handleCheckout(PRICE_IDS.pro, 'subscription')}
-					disabled={isLoading !== null}
-				>
-					{isLoading === PRICE_IDS.pro ? 'Loading...' : 'Get Pro'}
-				</button>
-			{:else}
-				<a href="/auth/login?redirect=/pricing" class="btn-plan primary">Sign up</a>
-			{/if}
-		</div>
+		<!-- Pro Plan -->
+		<PlanCard
+			name="Pro"
+			price={25}
+			searches={200}
+			features={[
+				'200 searches per month',
+				'5 curated results per search',
+				'Shareable result links',
+				'Profile preferences',
+				'Email notifications',
+				'Priority processing'
+			]}
+			popular
+			priceId={PRICE_IDS.pro}
+			onselect={(id) => data.user ? handleCheckout(id, 'subscription') : window.location.href = `/auth/login?redirect=/pricing`}
+		/>
 
-		<div class="plan">
-			<div class="plan-header">
-				<h2>Credit Pack</h2>
-				<div class="price">
-					<span class="amount">$10</span>
-					<span class="period">one-time</span>
+		<!-- Credit Pack -->
+		<div class="scout-card p-6 flex flex-col h-full">
+			<div class="text-center mb-6">
+				<h3 class="text-xl font-bold text-bark dark:text-cream mb-2">Credit Pack</h3>
+				<div class="flex items-baseline justify-center gap-1">
+					<span class="text-4xl font-bold text-bark dark:text-cream">$10</span>
+					<span class="text-bark-400 dark:text-cream-500">one-time</span>
 				</div>
+				<p class="text-sm text-bark-400 dark:text-cream-500 mt-2">
+					50 searches • Never expires
+				</p>
 			</div>
-			<ul class="features">
-				<li>50 additional searches</li>
-				<li>Never expires</li>
-				<li>Stack with subscription</li>
-				<li>Use anytime</li>
+
+			<ul class="space-y-3 mb-6 flex-1">
+				{#each ['50 additional searches', 'Never expires', 'Stack with subscription', 'Use anytime'] as feature}
+					<li class="flex items-start gap-2 text-sm text-bark-600 dark:text-cream-400">
+						<Icons name="check" size="sm" class="text-grove-500 mt-0.5 flex-shrink-0" />
+						<span>{feature}</span>
+					</li>
+				{/each}
 			</ul>
+
 			{#if data.user}
 				<button
-					class="btn-plan"
 					onclick={() => handleCheckout(PRICE_IDS.credits, 'payment')}
 					disabled={isLoading !== null}
+					class="scout-btn-secondary w-full"
 				>
 					{isLoading === PRICE_IDS.credits ? 'Loading...' : 'Buy Credits'}
 				</button>
 			{:else}
-				<a href="/auth/login?redirect=/pricing" class="btn-plan">Sign up first</a>
+				<a href="/auth/login?redirect=/pricing" class="scout-btn-secondary w-full text-center">
+					Sign up first
+				</a>
 			{/if}
 		</div>
 	</div>
 
-	<section class="faq">
-		<h2>Questions?</h2>
-		<div class="faq-grid">
-			<div class="faq-item">
-				<h3>What counts as a search?</h3>
-				<p>Each search request uses 1 credit. If we can't find results, you don't get charged.</p>
-			</div>
-			<div class="faq-item">
-				<h3>Do credits roll over?</h3>
-				<p>Subscription credits reset monthly. Credit pack purchases never expire.</p>
-			</div>
-			<div class="faq-item">
-				<h3>Can I cancel anytime?</h3>
-				<p>Yes! Cancel anytime from your settings. You'll keep access until your billing period ends.</p>
-			</div>
-			<div class="faq-item">
-				<h3>What payment methods?</h3>
-				<p>We accept all major credit cards through Stripe.</p>
+	<!-- FAQ Section -->
+	<section class="bg-cream-100 dark:bg-bark-800 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-16">
+		<div class="max-w-4xl mx-auto">
+			<h2 class="text-display-sm text-bark dark:text-cream text-center mb-12">Frequently Asked Questions</h2>
+			<div class="grid sm:grid-cols-2 gap-8">
+				{#each faqs as faq}
+					<div class="scout-card p-6">
+						<h3 class="font-semibold text-bark dark:text-cream mb-2">{faq.q}</h3>
+						<p class="text-sm text-bark-500 dark:text-cream-500">{faq.a}</p>
+					</div>
+				{/each}
 			</div>
 		</div>
 	</section>
+
+	<!-- CTA -->
+	<section class="text-center py-16">
+		<h2 class="text-heading-lg text-bark dark:text-cream mb-4">Ready to start finding deals?</h2>
+		<p class="text-bark-500 dark:text-cream-500 mb-6">Join overwhelmed shoppers who've found peace with Scout.</p>
+		{#if !data.user}
+			<a href="/auth/login" class="scout-btn-primary text-lg px-8 py-4">
+				<Icons name="sparkles" size="md" />
+				Get Started Free
+			</a>
+		{:else}
+			<a href="/search/new" class="scout-btn-primary text-lg px-8 py-4">
+				<Icons name="sparkles" size="md" />
+				Start Your First Search
+			</a>
+		{/if}
+	</section>
 </div>
-
-<style>
-	.pricing-page {
-		max-width: 1000px;
-		margin: 0 auto;
-	}
-
-	header {
-		text-align: center;
-		margin-bottom: 3rem;
-	}
-
-	h1 {
-		margin-bottom: 0.5rem;
-	}
-
-	.subtitle {
-		color: #666;
-		font-size: 1.125rem;
-	}
-
-	.alert {
-		padding: 1rem;
-		border-radius: 0.5rem;
-		margin-bottom: 2rem;
-		text-align: center;
-	}
-
-	.alert.info {
-		background: #eff6ff;
-		color: #1e40af;
-	}
-
-	.alert.error {
-		background: #fef2f2;
-		color: #991b1b;
-	}
-
-	.plans {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-		gap: 1.5rem;
-		margin-bottom: 4rem;
-	}
-
-	.plan {
-		background: white;
-		border: 1px solid #e5e7eb;
-		border-radius: 1rem;
-		padding: 2rem;
-		position: relative;
-	}
-
-	.plan.featured {
-		border-color: #6366f1;
-		box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
-	}
-
-	.badge {
-		position: absolute;
-		top: -0.75rem;
-		left: 50%;
-		transform: translateX(-50%);
-		background: #6366f1;
-		color: white;
-		padding: 0.25rem 1rem;
-		border-radius: 1rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.plan-header {
-		text-align: center;
-		margin-bottom: 1.5rem;
-	}
-
-	.plan-header h2 {
-		margin-bottom: 0.5rem;
-	}
-
-	.price {
-		display: flex;
-		align-items: baseline;
-		justify-content: center;
-		gap: 0.25rem;
-	}
-
-	.amount {
-		font-size: 2.5rem;
-		font-weight: 700;
-		color: #1a1a2e;
-	}
-
-	.period {
-		color: #666;
-	}
-
-	.features {
-		list-style: none;
-		padding: 0;
-		margin: 0 0 2rem;
-	}
-
-	.features li {
-		padding: 0.5rem 0;
-		border-bottom: 1px solid #f3f4f6;
-		color: #374151;
-	}
-
-	.features li:last-child {
-		border-bottom: none;
-	}
-
-	.btn-plan {
-		display: block;
-		width: 100%;
-		padding: 0.875rem;
-		border: 1px solid #e5e7eb;
-		border-radius: 0.5rem;
-		background: white;
-		color: #374151;
-		font-size: 1rem;
-		font-weight: 500;
-		text-align: center;
-		text-decoration: none;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.btn-plan:hover:not(:disabled) {
-		border-color: #6366f1;
-		color: #6366f1;
-	}
-
-	.btn-plan.primary {
-		background: #6366f1;
-		border-color: #6366f1;
-		color: white;
-	}
-
-	.btn-plan.primary:hover:not(:disabled) {
-		background: #5558e3;
-	}
-
-	.btn-plan:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.faq {
-		background: #f9fafb;
-		margin: 0 -2rem;
-		padding: 3rem 2rem;
-	}
-
-	.faq h2 {
-		text-align: center;
-		margin-bottom: 2rem;
-	}
-
-	.faq-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: 2rem;
-	}
-
-	.faq-item h3 {
-		font-size: 1rem;
-		margin-bottom: 0.5rem;
-		color: #1a1a2e;
-	}
-
-	.faq-item p {
-		color: #666;
-		font-size: 0.875rem;
-		line-height: 1.5;
-	}
-</style>
