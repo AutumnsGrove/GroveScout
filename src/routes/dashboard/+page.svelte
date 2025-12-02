@@ -1,201 +1,111 @@
 <script lang="ts">
+	import { Icons, CreditBalance, SearchCard, EmptyState } from '$lib/components/scout';
+
 	let { data } = $props();
 </script>
 
-<div class="dashboard">
-	<header class="dashboard-header">
+<svelte:head>
+	<title>Dashboard - Scout</title>
+</svelte:head>
+
+<div class="scout-container py-8">
+	<!-- Header -->
+	<header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-8 border-b border-cream-300 dark:border-bark-600">
 		<div>
-			<h1>Welcome back{data.profile?.display_name ? `, ${data.profile.display_name}` : ''}!</h1>
-			<p class="credits">
-				<span class="credit-count">{data.credits}</span> credits remaining
+			<h1 class="text-display-sm text-bark dark:text-cream mb-1">
+				Welcome back{data.profile?.display_name ? `, ${data.profile.display_name}` : ''}!
+			</h1>
+			<p class="text-bark-500 dark:text-cream-500">
+				Ready to find some deals?
 			</p>
 		</div>
-		<a href="/search/new" class="btn-primary">New Search</a>
+		<div class="flex items-center gap-4">
+			<CreditBalance credits={data.credits} variant="compact" />
+			<a href="/search/new" class="scout-btn-primary">
+				<Icons name="sparkles" size="sm" />
+				New Search
+			</a>
+		</div>
 	</header>
 
+	<!-- Profile Setup Prompt -->
 	{#if !data.profile?.style_notes}
-		<div class="setup-prompt">
-			<h3>Complete your profile</h3>
-			<p>Add your sizes, color preferences, and style notes to get better personalized results.</p>
-			<a href="/profile" class="btn-secondary">Set up profile</a>
+		<div class="scout-card p-6 mb-8 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+			<div class="flex items-start gap-4">
+				<div class="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+					<Icons name="user" size="md" class="text-amber-600 dark:text-amber-400" />
+				</div>
+				<div class="flex-1">
+					<h3 class="font-semibold text-bark dark:text-cream mb-1">Complete your profile</h3>
+					<p class="text-sm text-bark-600 dark:text-cream-400 mb-3">
+						Add your sizes, color preferences, and style notes to get better personalized results.
+					</p>
+					<a href="/profile" class="scout-btn-secondary text-sm">
+						<Icons name="user" size="sm" />
+						Set up profile
+					</a>
+				</div>
+			</div>
 		</div>
 	{/if}
 
-	<section class="recent-searches">
-		<h2>Recent Searches</h2>
+	<!-- Stats Overview -->
+	<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+		<div class="scout-card p-4 text-center">
+			<div class="scout-stat-value">{data.credits}</div>
+			<div class="scout-stat-label">Credits Left</div>
+		</div>
+		<div class="scout-card p-4 text-center">
+			<div class="scout-stat-value">{data.searches.length}</div>
+			<div class="scout-stat-label">Total Searches</div>
+		</div>
+		<div class="scout-card p-4 text-center">
+			<div class="scout-stat-value">{data.searches.filter(s => s.status === 'completed').length}</div>
+			<div class="scout-stat-label">Completed</div>
+		</div>
+		<div class="scout-card p-4 text-center">
+			<div class="scout-stat-value">{data.searches.filter(s => s.status === 'running' || s.status === 'pending').length}</div>
+			<div class="scout-stat-label">In Progress</div>
+		</div>
+	</div>
+
+	<!-- Recent Searches -->
+	<section>
+		<div class="flex items-center justify-between mb-4">
+			<h2 class="text-heading-lg text-bark dark:text-cream">Recent Searches</h2>
+			{#if data.searches.length > 0}
+				<a href="/search/new" class="text-sm text-grove-600 dark:text-grove-400 hover:underline flex items-center gap-1">
+					<Icons name="sparkles" size="sm" />
+					New search
+				</a>
+			{/if}
+		</div>
 
 		{#if data.searches.length === 0}
-			<div class="empty-state">
-				<p>No searches yet. Start your first search to find amazing deals!</p>
-				<a href="/search/new" class="btn-primary">Start Searching</a>
-			</div>
-		{:else}
-			<div class="search-list">
-				{#each data.searches as search}
-					<a href="/search/{search.id}" class="search-card">
-						<div class="search-query">
-							{search.query_freeform || 'Structured search'}
-						</div>
-						<div class="search-meta">
-							<span class="status status-{search.status}">{search.status}</span>
-							<span class="date">
-								{new Date(search.created_at).toLocaleDateString()}
-							</span>
-						</div>
+			<EmptyState
+				icon="search"
+				title="No searches yet"
+				description="Start your first search to find amazing deals tailored to your preferences."
+			>
+				{#snippet action()}
+					<a href="/search/new" class="scout-btn-primary">
+						<Icons name="sparkles" size="sm" />
+						Start Searching
 					</a>
+				{/snippet}
+			</EmptyState>
+		{:else}
+			<div class="grid gap-4">
+				{#each data.searches as search}
+					<SearchCard
+						id={search.id}
+						query={search.query_freeform || 'Structured search'}
+						status={search.status}
+						createdAt={search.created_at}
+						resultCount={5}
+					/>
 				{/each}
 			</div>
 		{/if}
 	</section>
 </div>
-
-<style>
-	.dashboard {
-		max-width: 800px;
-		margin: 0 auto;
-	}
-
-	.dashboard-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		margin-bottom: 2rem;
-		padding-bottom: 2rem;
-		border-bottom: 1px solid #eee;
-	}
-
-	h1 {
-		margin-bottom: 0.25rem;
-	}
-
-	.credits {
-		color: #666;
-	}
-
-	.credit-count {
-		font-weight: 600;
-		color: #6366f1;
-	}
-
-	.btn-primary {
-		display: inline-block;
-		background: #6366f1;
-		color: white;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.5rem;
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.btn-secondary {
-		display: inline-block;
-		background: #f3f4f6;
-		color: #333;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.setup-prompt {
-		background: #fef3c7;
-		border: 1px solid #fcd34d;
-		border-radius: 0.5rem;
-		padding: 1.5rem;
-		margin-bottom: 2rem;
-	}
-
-	.setup-prompt h3 {
-		margin: 0 0 0.5rem;
-		color: #92400e;
-	}
-
-	.setup-prompt p {
-		margin: 0 0 1rem;
-		color: #92400e;
-	}
-
-	.recent-searches h2 {
-		margin-bottom: 1rem;
-	}
-
-	.empty-state {
-		text-align: center;
-		padding: 3rem;
-		background: #f9fafb;
-		border-radius: 0.5rem;
-	}
-
-	.empty-state p {
-		margin-bottom: 1rem;
-		color: #666;
-	}
-
-	.search-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.search-card {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem 1.25rem;
-		background: white;
-		border: 1px solid #e5e7eb;
-		border-radius: 0.5rem;
-		text-decoration: none;
-		color: inherit;
-		transition: border-color 0.2s, box-shadow 0.2s;
-	}
-
-	.search-card:hover {
-		border-color: #6366f1;
-		box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
-	}
-
-	.search-query {
-		font-weight: 500;
-		color: #1a1a2e;
-	}
-
-	.search-meta {
-		display: flex;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.status {
-		padding: 0.25rem 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.75rem;
-		font-weight: 500;
-		text-transform: uppercase;
-	}
-
-	.status-pending {
-		background: #fef3c7;
-		color: #92400e;
-	}
-
-	.status-running {
-		background: #dbeafe;
-		color: #1e40af;
-	}
-
-	.status-completed {
-		background: #d1fae5;
-		color: #065f46;
-	}
-
-	.status-failed {
-		background: #fee2e2;
-		color: #991b1b;
-	}
-
-	.date {
-		color: #9ca3af;
-		font-size: 0.875rem;
-	}
-</style>

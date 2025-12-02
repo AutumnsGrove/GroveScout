@@ -1,9 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
+	import { Icons, SearchInput, CreditBalance } from '$lib/components/scout';
+
+	let { data } = $props();
 
 	let query = $state('');
 	let isSubmitting = $state(false);
 	let error = $state<string | null>(null);
+
+	// Check for pre-filled query from URL
+	onMount(() => {
+		const urlQuery = $page.url.searchParams.get('q');
+		if (urlQuery) {
+			query = urlQuery;
+		}
+	});
 
 	interface ApiResponse {
 		success?: boolean;
@@ -11,9 +24,8 @@
 		error?: { message: string };
 	}
 
-	async function handleSubmit(e: Event) {
-		e.preventDefault();
-		if (!query.trim() || isSubmitting) return;
+	async function handleSubmit(value: string) {
+		if (!value.trim() || isSubmitting) return;
 
 		isSubmitting = true;
 		error = null;
@@ -22,7 +34,7 @@
 			const response = await fetch('/api/search', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ query: query.trim() })
+				body: JSON.stringify({ query: value.trim() })
 			});
 
 			const result: ApiResponse = await response.json();
@@ -36,163 +48,94 @@
 			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Something went wrong';
-		} finally {
 			isSubmitting = false;
 		}
 	}
+
+	const examples = [
+		{ query: 'Wireless earbuds, good for running, under $100', icon: '🎧' },
+		{ query: 'Cozy blanket for the couch, oversized, soft material', icon: '🛋️' },
+		{ query: 'Standing desk converter, under $200, good reviews', icon: '🖥️' },
+		{ query: 'Birthday gift for a coffee lover, $30-50 budget', icon: '☕' }
+	];
 </script>
 
-<div class="search-page">
-	<h1>What are you looking for?</h1>
-	<p class="subtitle">Describe what you want. Be as specific or vague as you like.</p>
+<svelte:head>
+	<title>New Search - Scout</title>
+</svelte:head>
 
-	<form onsubmit={handleSubmit}>
-		<textarea
-			bind:value={query}
-			placeholder="Example: Cozy oversized sweater, earth tones, under $60. Or: mechanical keyboard, clicky switches, RGB, under $80"
-			rows="4"
-			disabled={isSubmitting}
-		></textarea>
+<div class="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12">
+	<div class="scout-container max-w-2xl">
+		<!-- Header -->
+		<div class="text-center mb-8">
+			<div class="inline-flex items-center justify-center w-16 h-16 bg-grove-100 dark:bg-grove-900/30 rounded-full mb-4">
+				<Icons name="sparkles" size="xl" class="text-grove-600 dark:text-grove-400" />
+			</div>
+			<h1 class="text-display-sm text-bark dark:text-cream mb-2">What are you looking for?</h1>
+			<p class="text-bark-500 dark:text-cream-500">
+				Describe what you want. Be as specific or vague as you like.
+			</p>
+		</div>
 
-		{#if error}
-			<div class="error">{error}</div>
+		<!-- Search Form -->
+		<div class="scout-card p-6 mb-6">
+			<SearchInput
+				bind:value={query}
+				loading={isSubmitting}
+				onsubmit={handleSubmit}
+				autofocus
+				placeholder="Example: Cozy oversized sweater, earth tones, under $60"
+			/>
+
+			{#if error}
+				<div class="mt-4 p-4 rounded-grove bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+					<div class="flex items-center gap-2 text-red-700 dark:text-red-300">
+						<Icons name="x" size="sm" />
+						<span class="text-sm">{error}</span>
+					</div>
+				</div>
+			{/if}
+
+			<div class="mt-4 flex items-center justify-between text-sm text-bark-400 dark:text-cream-500">
+				<span class="flex items-center gap-1">
+					<Icons name="credits" size="sm" />
+					Uses 1 credit
+				</span>
+				<span class="flex items-center gap-1">
+					<Icons name="clock" size="sm" />
+					Results in 2-3 min
+				</span>
+			</div>
+		</div>
+
+		<!-- Credit Balance -->
+		{#if data.credits !== undefined}
+			<div class="flex justify-center mb-8">
+				<CreditBalance credits={data.credits} variant="default" />
+			</div>
 		{/if}
 
-		<button type="submit" disabled={!query.trim() || isSubmitting}>
-			{isSubmitting ? 'Starting search...' : 'Find deals'}
-		</button>
-
-		<p class="hint">
-			This will use 1 credit. Results usually take 2-3 minutes.
-		</p>
-	</form>
-
-	<section class="examples">
-		<h3>Example searches</h3>
-		<div class="example-list">
-			<button type="button" onclick={() => (query = 'Wireless earbuds, good for running, under $100')}>
-				"Wireless earbuds, good for running, under $100"
-			</button>
-			<button type="button" onclick={() => (query = 'Cozy blanket for the couch, oversized, soft material')}>
-				"Cozy blanket for the couch, oversized, soft material"
-			</button>
-			<button type="button" onclick={() => (query = 'Standing desk converter, under $200, good reviews')}>
-				"Standing desk converter, under $200, good reviews"
-			</button>
+		<!-- Example Searches -->
+		<div class="border-t border-cream-300 dark:border-bark-600 pt-8">
+			<h3 class="text-sm font-medium text-bark-400 dark:text-cream-500 uppercase tracking-wider mb-4 text-center">
+				Try an example
+			</h3>
+			<div class="grid sm:grid-cols-2 gap-3">
+				{#each examples as example}
+					<button
+						type="button"
+						onclick={() => query = example.query}
+						class="scout-card p-4 text-left hover:shadow-grove-md transition-all duration-grove group"
+					>
+						<div class="flex items-start gap-3">
+							<span class="text-2xl">{example.icon}</span>
+							<span class="text-sm text-bark-600 dark:text-cream-400 group-hover:text-grove-600 dark:group-hover:text-grove-400 transition-colors">
+								"{example.query}"
+							</span>
+						</div>
+					</button>
+				{/each}
+			</div>
 		</div>
-	</section>
+	</div>
 </div>
-
-<style>
-	.search-page {
-		max-width: 600px;
-		margin: 0 auto;
-		padding-top: 2rem;
-	}
-
-	h1 {
-		margin-bottom: 0.5rem;
-	}
-
-	.subtitle {
-		color: #666;
-		margin-bottom: 2rem;
-	}
-
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	textarea {
-		width: 100%;
-		padding: 1rem;
-		border: 2px solid #e5e7eb;
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		font-family: inherit;
-		resize: vertical;
-		transition: border-color 0.2s;
-	}
-
-	textarea:focus {
-		outline: none;
-		border-color: #6366f1;
-	}
-
-	textarea:disabled {
-		background: #f9fafb;
-	}
-
-	.error {
-		background: #fee2e2;
-		color: #991b1b;
-		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
-	}
-
-	button[type='submit'] {
-		background: #6366f1;
-		color: white;
-		border: none;
-		padding: 1rem 2rem;
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-
-	button[type='submit']:hover:not(:disabled) {
-		background: #5558e3;
-	}
-
-	button[type='submit']:disabled {
-		background: #9ca3af;
-		cursor: not-allowed;
-	}
-
-	.hint {
-		text-align: center;
-		color: #9ca3af;
-		font-size: 0.875rem;
-	}
-
-	.examples {
-		margin-top: 3rem;
-		padding-top: 2rem;
-		border-top: 1px solid #e5e7eb;
-	}
-
-	.examples h3 {
-		margin-bottom: 1rem;
-		color: #666;
-		font-size: 0.875rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.example-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.example-list button {
-		background: #f9fafb;
-		border: 1px solid #e5e7eb;
-		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
-		text-align: left;
-		font-size: 0.875rem;
-		color: #666;
-		cursor: pointer;
-		transition: background-color 0.2s, border-color 0.2s;
-	}
-
-	.example-list button:hover {
-		background: #f3f4f6;
-		border-color: #d1d5db;
-	}
-</style>
