@@ -4,6 +4,7 @@ import type { RequestHandler } from './$types';
 import { SearchInputSchema, type SearchJob, type ProfileContext } from '$lib/types';
 import { createSearch, getProfileByUserId, getCreditBalance, createSearchResult, trackEvent } from '$lib/server/db';
 import { findCachedSearch } from '$lib/server/cache';
+import { processSearchJob } from '$lib/server/agents/worker';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	if (!locals.user) {
@@ -120,7 +121,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		if (profile.style_notes) profileContext.style_notes = profile.style_notes;
 	}
 
-	// Enqueue job
+	// Build job
 	const job: SearchJob = {
 		search_id: search.id,
 		user_id: locals.user.id,
@@ -129,19 +130,44 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		profile: profileContext
 	};
 
-	await SEARCH_QUEUE.send(job);
-
 	// Track search created
 	await trackEvent(DB, 'search_created', locals.user.id, {
 		search_id: search.id,
 		has_structured: !!structured
 	});
 
+	// Check if queue is available (requires paid plan)
+	if (SEARCH_QUEUE) {
+		// Use queue for async processing
+		await SEARCH_QUEUE.send(job);
+		return json({
+			success: true,
+			data: {
+				id: search.id,
+				status: search.status
+			}
+		});
+	}
+
+	// No queue available - run search synchronously
+	// This blocks the request but allows the app to work without paid queue feature
+	const workerEnv = {
+		DB,
+		KV,
+		ANTHROPIC_API_KEY: platform.env.ANTHROPIC_API_KEY,
+		BRAVE_API_KEY: platform.env.BRAVE_API_KEY,
+		RESEND_API_KEY: platform.env.RESEND_API_KEY || '',
+		SITE_URL: platform.env.SITE_URL || 'https://scout.grove.place'
+	};
+
+	// Process synchronously (this may take 30-60 seconds)
+	await processSearchJob(job, workerEnv);
+
 	return json({
 		success: true,
 		data: {
 			id: search.id,
-			status: search.status
+			status: 'running' // Will update to completed/failed during processing
 		}
 	});
 };

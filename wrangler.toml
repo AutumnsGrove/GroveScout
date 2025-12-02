@@ -20,16 +20,16 @@ database_id = "6a289378-c662-4c6a-9f1b-fa5296e03fa2" # Run: npx wrangler d1 crea
 binding = "KV"
 id = "31eb5622c7fd41ec8fc8c8f939f5099b" # Run: npx wrangler kv:namespace create SCOUT_CACHE
 
-# Queue for async search jobs (requires paid plan)
-# [[queues.producers]]
-# queue = "scout-search-jobs"
-# binding = "SEARCH_QUEUE"
+# Queue for async search jobs
+[[queues.producers]]
+queue = "scout-search-jobs"
+binding = "SEARCH_QUEUE"
 
-# Queue consumer (separate worker, defined below)
-# [[queues.consumers]]
-# queue = "scout-search-jobs"
-# max_batch_size = 1
-# max_retries = 3
+# Queue consumer - processes search jobs
+[[queues.consumers]]
+queue = "scout-search-jobs"
+max_batch_size = 1
+max_retries = 3
 
 # Environment variables (secrets set via wrangler secret put)
 # ANTHROPIC_API_KEY - Claude API key
@@ -62,6 +62,16 @@ database_id = "6a289378-c662-4c6a-9f1b-fa5296e03fa2"
 [[env.production.kv_namespaces]]
 binding = "KV"
 id = "31eb5622c7fd41ec8fc8c8f939f5099b"
+
+# Queue (production)
+[[env.production.queues.producers]]
+queue = "scout-search-jobs"
+binding = "SEARCH_QUEUE"
+
+[[env.production.queues.consumers]]
+queue = "scout-search-jobs"
+max_batch_size = 1
+max_retries = 3
 
 [env.production.vars]
 ENVIRONMENT = "production"

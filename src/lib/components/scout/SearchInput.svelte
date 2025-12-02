@@ -49,17 +49,17 @@
 			bind:value
 			{placeholder}
 			disabled={disabled || loading}
-			rows="1"
+			rows="3"
 			{autofocus}
 			onkeydown={handleKeydown}
 			onfocus={() => showExamples = true}
 			onblur={() => setTimeout(() => showExamples = false, 200)}
-			class="scout-search-input resize-none min-h-[60px] max-h-[200px]"
+			class="scout-search-input resize-none min-h-[100px] max-h-[300px]"
 		></textarea>
 		<button
 			type="submit"
 			disabled={disabled || loading || !value.trim()}
-			class="absolute right-3 top-1/2 -translate-y-1/2 scout-btn-primary px-4 py-2"
+			class="absolute right-3 bottom-3 scout-btn-primary px-4 py-2"
 		>
 			{#if loading}
 				<Icons name="loader" size="sm" class="animate-spin" />
