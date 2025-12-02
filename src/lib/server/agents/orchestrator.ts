@@ -128,13 +128,12 @@ You analyze search results and extract product information. For each promising p
 }
 
 CRITICAL RULES:
-- **URL MUST come EXACTLY from the search results** - NEVER make up or guess URLs
-- If you don't see a direct product URL in the search results, skip that product
-- Only use URLs that appear in the "URL:" field of the search results provided
+- **URL**: Use the URL from the search result where you found the product. Copy it exactly - NEVER invent or guess URLs
 - Price must be in CENTS (e.g., $49.99 = 4999)
 - Only include products that genuinely match the search criteria
 - Confidence should reflect how well the product matches (price range, requirements, style)
 - Skip products that are out of stock, expired deals, or from sketchy retailers
+- Prefer URLs from known retailers (Amazon, Target, Walmart, Best Buy, etc.) when available
 - Aim for 15-25 quality results`;
 
 const CURATOR_SYSTEM_PROMPT = `You are the Scout Curator. Your job is to take a list of products and select the 5 best options for the user.

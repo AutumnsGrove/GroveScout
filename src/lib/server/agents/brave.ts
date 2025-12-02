@@ -47,16 +47,16 @@ export function buildSearchQueries(query: string, profile: {
 	const queries: string[] = [];
 	const budgetStr = profile.budget_max ? ` under $${profile.budget_max / 100}` : '';
 
-	// Main deal search
-	queries.push(`${query} deals 2024`);
-	queries.push(`${query} sale${budgetStr}`);
-	queries.push(`best ${query} deals`);
+	// Direct retailer searches (most likely to have product pages with prices)
+	queries.push(`${query} site:amazon.com${budgetStr}`);
+	queries.push(`${query} site:walmart.com${budgetStr}`);
+	queries.push(`${query} site:target.com`);
+	queries.push(`${query} site:bestbuy.com`);
 
-	// Deal aggregator searches
-	queries.push(`site:slickdeals.net ${query}`);
-	queries.push(`${query} coupon discount`);
+	// General shopping search
+	queries.push(`buy ${query}${budgetStr} price`);
 
-	// Retailer-specific searches
+	// Retailer-specific searches from user preferences
 	if (profile.favorite_retailers?.length) {
 		for (const retailer of profile.favorite_retailers.slice(0, 2)) {
 			queries.push(`${query} site:${retailer}`);
