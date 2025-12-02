@@ -1,11 +1,10 @@
-import grovePreset from '@groveengine/ui/tailwind';
+import grovePreset from './src/lib/tailwind.preset.js';
 
 /** @type {import('tailwindcss').Config} */
 export default {
 	presets: [grovePreset],
 	content: [
-		'./src/**/*.{html,js,svelte,ts}',
-		'./node_modules/@groveengine/ui/dist/**/*.{html,js,svelte,ts}'
+		'./src/**/*.{html,js,svelte,ts}'
 	],
 	darkMode: 'class',
 	theme: {

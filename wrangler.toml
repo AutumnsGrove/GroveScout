@@ -51,6 +51,18 @@ SITE_URL = "http://localhost:5173"
 # Production overrides
 [env.production]
 name = "scout"
+
+# D1 Database (production)
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "scout-db"
+database_id = "6a289378-c662-4c6a-9f1b-fa5296e03fa2"
+
+# KV Namespace (production)
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "31eb5622c7fd41ec8fc8c8f939f5099b"
+
 [env.production.vars]
 ENVIRONMENT = "production"
 SITE_URL = "https://scout.grove.place"
