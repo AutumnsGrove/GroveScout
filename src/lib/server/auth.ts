@@ -702,7 +702,7 @@ export async function handleOAuthCallback(
 
 export function createSessionCookie(sessionId: string, secure: boolean = true): string {
 	const maxAge = SESSION_TTL;
-	const sameSite = 'Strict'; // Changed from Lax for better CSRF protection
+	const sameSite = 'Lax'; // Lax required for OAuth redirects (cross-site navigation)
 	const path = '/';
 
 	let cookie = `session=${sessionId}; Max-Age=${maxAge}; Path=${path}; SameSite=${sameSite}; HttpOnly`;
