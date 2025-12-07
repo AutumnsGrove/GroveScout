@@ -17,6 +17,17 @@ Scout fixes this:
 
 No infinite scrolling. No decision paralysis. No accidental $200 Amazon cart.
 
+## Current Status
+
+Scout is a working MVP with core functionality implemented:
+- **Authentication**: Google & Apple OAuth with session management
+- **Search Pipeline**: AI‑powered multi‑agent search (Brave Search + Claude)
+- **Results Curation**: Returns 5 curated products with shareable links
+- **Basic Billing**: Credit‑based system with Stripe integration
+- **Profile & Dashboard**: User preferences and search history
+
+The system is deployed at **scout.grove.place** and ready for beta testing.
+
 ## Tech Stack
 
 | Layer     | Technology              |
