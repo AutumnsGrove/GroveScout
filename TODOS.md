@@ -32,6 +32,7 @@
 - [ ] Tool definitions (web_search, web_fetch, save_result, mark_complete) (functionality integrated in orchestrator)
 - [x] Brave Search API integration
 - [ ] Web fetch with content extraction (not yet implemented)
+    - [ ] optional add smart fetch like how Claude does it - using a model in the middle, exposed as a regular fetch tool call
 - [x] Orchestrator agent implementation
 - [x] Curator agent implementation
 - [x] Result aggregation and deduplication
