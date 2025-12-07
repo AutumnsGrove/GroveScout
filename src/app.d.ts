@@ -18,6 +18,7 @@ declare global {
 				DB: D1Database;
 				KV: KVNamespace;
 				SEARCH_QUEUE: Queue<import('$lib/types').SearchJob>;
+				SEARCH_JOB: DurableObjectNamespace<import('$lib/server/agents/durable-object/search-job-do').SearchJobDO>;
 				ANTHROPIC_API_KEY: string;
 				BRAVE_API_KEY: string;
 				STRIPE_SECRET_KEY: string;
@@ -31,6 +32,10 @@ declare global {
 				APPLE_PRIVATE_KEY?: string;
 				ENVIRONMENT: string;
 				SITE_URL: string;
+				MAX_BATCHES?: string;
+				TARGET_RESULTS?: string;
+				DRIVER_PROVIDER?: string;
+				SWARM_PROVIDER?: string;
 			};
 			context: ExecutionContext;
 			caches: CacheStorage & { default: Cache };

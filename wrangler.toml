@@ -20,6 +20,16 @@ database_id = "6a289378-c662-4c6a-9f1b-fa5296e03fa2" # Run: npx wrangler d1 crea
 binding = "KV"
 id = "31eb5622c7fd41ec8fc8c8f939f5099b" # Run: npx wrangler kv:namespace create SCOUT_CACHE
 
+# Durable Object for advanced search job orchestration
+[[durable_objects.bindings]]
+name = "SEARCH_JOB"
+class_name = "SearchJobDO"
+
+# SQLite migrations for Durable Objects
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SearchJobDO"]
+
 # Queue for async search jobs (producer only - consumer needs separate worker)
 # Note: Consumer disabled until we create a dedicated queue worker
 # For now, searches run synchronously via the fallback in +server.ts

@@ -3,7 +3,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { braveSearch, buildSearchQueries } from './brave';
-import type { SavedProduct, SearchContext } from './types';
+import type { SavedProduct, SearchContext, OrchestratorResult } from './types';
 import { AGENT_CONFIG } from './config';
 
 // Known safe retail domains (partial list - expand as needed)
@@ -154,7 +154,7 @@ export async function runSearchOrchestrator(
 	anthropicApiKey: string,
 	braveApiKey: string,
 	context: SearchContext
-): Promise<{ raw: SavedProduct[]; curated: SavedProduct[] }> {
+): Promise<OrchestratorResult> {
 	const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
 	// Build search queries

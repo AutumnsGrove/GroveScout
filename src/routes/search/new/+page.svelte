@@ -9,6 +9,7 @@
 	let query = $state('');
 	let isSubmitting = $state(false);
 	let error = $state<string | null>(null);
+	let advanced = $state(false);
 
 	// Check for pre-filled query from URL
 	onMount(() => {
@@ -30,8 +31,10 @@
 		isSubmitting = true;
 		error = null;
 
+		const endpoint = advanced ? '/api/search/advanced' : '/api/search';
+
 		try {
-			const response = await fetch('/api/search', {
+			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ query: value.trim() })
@@ -103,8 +106,25 @@
 				</span>
 				<span class="flex items-center gap-1">
 					<Icons name="clock" size="sm" />
-					Results in 2-3 min
+					{advanced ? 'Results in 5-10 min (multi‑batch)' : 'Results in 2-3 min'}
 				</span>
+			</div>
+
+			<!-- Advanced search toggle -->
+			<div class="mt-4 pt-4 border-t border-cream-300 dark:border-bark-600">
+				<label class="flex items-center gap-2 cursor-pointer">
+					<input
+						type="checkbox"
+						bind:checked={advanced}
+						class="rounded-grove border-cream-400 dark:border-bark-500 text-grove-600 focus:ring-grove-500"
+					/>
+					<span class="text-sm text-bark-600 dark:text-cream-400">
+						Advanced search (multi‑batch AI orchestration)
+					</span>
+				</label>
+				<p class="text-xs text-bark-400 dark:text-cream-500 mt-1 ml-6">
+					Uses Durable Objects for iterative refinement, follow‑up questions, and better results.
+				</p>
 			</div>
 		</div>
 
