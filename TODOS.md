@@ -75,6 +75,8 @@ personal todos:
 - [ ] reference project on GroveEngine readme
 - [ ] more thorough integration with GroveEngine including similar chrome to other webpages (domain searcher, etc) to unify design language
 - [ ] ensure Cloudflare properly setup - d1 for short term storage, auto migration to R2 via markdown files that get live rendered on page load. migrates after 7 days but stays fully functional compared to d1 live version
+- [ ] user model curation via feedback (thumb up/down) with feedback passed to new search runs
+- [ ] load more searches button (5 at a time, also configurable)
 
 ---
 
