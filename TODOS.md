@@ -66,6 +66,7 @@ personal todos:
 - [ ] only seems to be calling 1-2 tools total, not a comprehensive search
 - [ ] switch internal text/tool model to deepseek v3.2, switch Claude to "image analysis" model used for photos/styling choices. used as a reference model for deepseek to query for style suggestions too based on user profile
 - [ ] live streaming results as search runs
+    - [ ] reference domain sesrching tool for example
 - [ ] migrate to Cloudflare durable object vs queues (started but not finished, keep queues as fallback)
 - [ ] proper settings screen for things like price range, brand prefs, etc 
 - [ ] proper filters on search page
