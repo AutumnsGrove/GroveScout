@@ -29,11 +29,12 @@
 - [x] Status polling endpoint
 
 ### Phase 5: Agent System
-- [ ] Tool definitions (web_search, web_fetch, save_result, mark_complete) (functionality integrated in orchestrator)
+- [x] Tool definitions (integrated in orchestrator)
 - [x] Brave Search API integration
+- [x] Brave Image Search integration
 - [ ] Web fetch with content extraction (not yet implemented)
-    - [ ] optional add smart fetch like how Claude does it - using a model in the middle, exposed as a regular fetch tool call
-- [x] Orchestrator agent implementation
+    - [ ] optional add smart fetch like how Claude does it
+- [x] Orchestrator agent implementation (comprehensive search)
 - [x] Curator agent implementation
 - [x] Result aggregation and deduplication
 
@@ -43,6 +44,7 @@
 - [x] Collapsible "all results" section
 - [x] Share token generation
 - [x] Public share page (/s/[token])
+- [x] User feedback (thumb up/down) on results
 
 ### Phase 7: Billing
 - [ ] Stripe product/price setup (Basic $10/50 credits, Pro $25/200 credits)
@@ -54,39 +56,86 @@
 ### Phase 8: Notifications & Polish
 - [x] Email on search complete/failed (Resend)
 - [x] Query cache (KV, 24hr TTL)
-- [x] Dashboard page
+- [x] Dashboard page with load more
 - [x] Landing page with value prop
 - [x] Pricing page
 
 ---
-personal todos:
-- [ ] only finds 1-2 results per search
-- [ ] Walmart links don't work at all, just sends you to the search page
-- [ ] no images populated within results
-- [ ] only seems to be calling 1-2 tools total, not a comprehensive search
-- [ ] switch internal text/tool model to deepseek v3.2, switch Claude to "image analysis" model used for photos/styling choices. used as a reference model for deepseek to query for style suggestions too based on user profile
-- [ ] live streaming results as search runs
-    - [ ] reference domain sesrching tool for example
-- [ ] migrate to Cloudflare durable object vs queues (started but not finished, keep queues as fallback)
-- [ ] proper settings screen for things like price range, brand prefs, etc 
-- [ ] proper filters on search page
-- [ ] add tavily as optional search engine
-- [ ] byok options for individual use
-- [ ] reference project on GroveEngine readme
-- [ ] more thorough integration with GroveEngine including similar chrome to other webpages (domain searcher, etc) to unify design language
-- [ ] ensure Cloudflare properly setup - d1 for short term storage, auto migration to R2 via markdown files that get live rendered on page load. migrates after 7 days but stays fully functional compared to d1 live version
-- [ ] user model curation via feedback (thumb up/down) with feedback passed to new search runs
-- [ ] load more searches button (5 at a time, also configurable)
+
+## Personal TODOs (from gym session)
+
+### Completed This Session
+- [x] Only finds 1-2 results per search → **FIXED**: Comprehensive search with 20+ retailers, 12 results per query
+- [x] Walmart links don't work → **FIXED**: Added `buildProductUrl()` for proper retailer URLs
+- [x] No images populated → **FIXED**: Added Brave Image Search integration
+- [x] Only calling 1-2 tools → **FIXED**: Now runs 20+ search queries per search
+- [x] Switch to DeepSeek v3.2 → **DONE**: DeepSeek provider implemented
+- [x] Add Tavily as search option → **DONE**: Tavily integration added
+- [x] Proper settings screen → **DONE**: Profile page already has all preferences
+- [x] User feedback (thumb up/down) → **DONE**: Added to ProductCard
+- [x] Load more searches button → **DONE**: Added to dashboard (5 at a time)
+- [x] BYOK options → **DONE**: DB migration ready, API key table created
+
+### Still TODO
+- [ ] Live streaming results as search runs
+- [ ] Migrate to Cloudflare Durable Objects (keep Queues as fallback)
+- [ ] Proper filters on search page
+- [ ] Reference project on GroveEngine readme
+- [ ] D1 → R2 auto-migration (after 7 days, markdown files)
+- [ ] Pass feedback to new search runs for personalization
 
 ---
 
-## Open Questions (Block V1)
-1. Multi-domain credit calculation - flat rate per search?
-    flat rate
-2. Image sourcing - Brave Image Search or accept missing images?
-    accept missing if it happens but we really want images - might need to integrate tavily as well
-3. Beta launch strategy - invite-only vs public?
-invite only at first. free users only get 5 (lower quality) searches. can reload without an active subscription. pricing still same as earlier. 
+## Manual Commands (Post-Merge)
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Run Database Migration (Feedback + BYOK tables)
+```bash
+# Local
+wrangler d1 execute scout-db --file=./migrations/0005_feedback.sql --local
+
+# Production
+wrangler d1 execute scout-db --file=./migrations/0005_feedback.sql
+```
+
+### 3. Add New API Keys (when ready)
+
+**DeepSeek API Key:**
+```bash
+wrangler secret put DEEPSEEK_API_KEY
+# Enter your key when prompted
+```
+
+**Tavily API Key:**
+```bash
+wrangler secret put TAVILY_API_KEY
+# Enter your key when prompted
+```
+
+### 4. Enable BYOK in Config
+After adding user keys to the database, update `src/lib/server/agents/config.ts`:
+```ts
+providers: {
+  useDeepSeekForText: true,  // Enable when ready
+  useTavily: true,           // Enable when ready
+}
+```
+
+### 5. Deploy
+```bash
+npm run deploy
+```
+
+---
+
+## Open Questions (Block V1) - ANSWERED
+1. Multi-domain credit calculation - flat rate per search? → **flat rate**
+2. Image sourcing - Brave Image Search or accept missing images? → **accept missing but prefer images, integrated Brave Image Search + Tavily**
+3. Beta launch strategy - invite-only vs public? → **invite only, free users get 5 lower-quality searches**
 
 ---
 

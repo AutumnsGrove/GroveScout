@@ -2,8 +2,8 @@
 // Main agent that coordinates search, aggregation, and curation
 
 import Anthropic from '@anthropic-ai/sdk';
-import { braveSearch, buildSearchQueries } from './brave';
-import type { SavedProduct, SearchContext, OrchestratorResult } from './types';
+import { braveSearch, braveImageSearch, buildSearchQueries, buildProductUrl } from './brave';
+import type { SavedProduct, SearchContext, OrchestratorResult, BraveImageResult } from './types';
 import { AGENT_CONFIG } from './config';
 
 // Known safe retail domains (partial list - expand as needed)
@@ -114,27 +114,34 @@ function validateImageUrl(urlString: string | undefined): string | null {
 	}
 }
 
-const ORCHESTRATOR_SYSTEM_PROMPT = `You are Scout, a shopping research assistant. Your job is to find the best deals matching a user's criteria and preferences.
+const ORCHESTRATOR_SYSTEM_PROMPT = `You are Scout, a comprehensive shopping research assistant. Your mission is to find AS MANY relevant products as possible matching the user's criteria.
 
-You analyze search results and extract product information. For each promising product you find, output a JSON object with this structure:
+IMPORTANT: Be THOROUGH. Extract EVERY product that could match - we want 20-40 products minimum. Don't be selective at this stage - that's the curator's job.
+
+For each product found, output a JSON object:
 {
-  "name": "Product Name",
-  "price_current": 4999,  // price in CENTS
-  "price_original": 7999, // original price in CENTS if on sale, omit if not
+  "name": "Full Product Name with Brand",
+  "price_current": 4999,
+  "price_original": 7999,
   "retailer": "amazon.com",
   "url": "https://...",
-  "description": "Brief description",
-  "confidence": 85  // 0-100 how well it matches the criteria
+  "description": "Brief description of features",
+  "confidence": 85
 }
 
-CRITICAL RULES:
-- **URL**: Use the URL from the search result where you found the product. Copy it exactly - NEVER invent or guess URLs
-- Price must be in CENTS (e.g., $49.99 = 4999)
-- Only include products that genuinely match the search criteria
-- Confidence should reflect how well the product matches (price range, requirements, style)
-- Skip products that are out of stock, expired deals, or from sketchy retailers
-- Prefer URLs from known retailers (Amazon, Target, Walmart, Best Buy, etc.) when available
-- Aim for 15-25 quality results`;
+EXTRACTION RULES:
+1. **Extract EVERY product** from the search results that could match - err on the side of inclusion
+2. **URL**: Copy the EXACT URL from search results - never invent URLs
+3. **Price**: Convert to CENTS (e.g., $49.99 = 4999). If you see "$49.99" or "49.99", output 4999
+4. **If price is missing**: Estimate based on product type, set confidence lower (50-60)
+5. **Retailer**: Extract domain from URL (e.g., "amazon.com", "walmart.com")
+6. **Confidence scoring**:
+   - 90-100: Perfect match, in budget, from preferred retailer
+   - 70-89: Good match, reasonable price
+   - 50-69: Partial match or missing info
+   - Below 50: Skip this product
+
+OUTPUT FORMAT: One JSON object per line, no markdown formatting, no explanations.`;
 
 const CURATOR_SYSTEM_PROMPT = `You are the Scout Curator. Your job is to take a list of products and select the 5 best options for the user.
 
@@ -157,25 +164,35 @@ export async function runSearchOrchestrator(
 ): Promise<OrchestratorResult> {
 	const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
-	// Build search queries
+	// Build comprehensive search queries
 	const queries = buildSearchQueries(context.query, {
 		favorite_retailers: context.profile.favorite_retailers,
+		excluded_retailers: context.profile.excluded_retailers,
 		budget_max: context.profile.budget_max
 	});
 
-	// Execute searches in parallel (batch of 3)
+	// Execute searches in parallel (larger batches of 5 for speed)
 	const allResults: string[] = [];
-	for (let i = 0; i < queries.length; i += 3) {
-		const batch = queries.slice(i, i + 3);
+	const imageResults: BraveImageResult[] = [];
+
+	// Run web searches in batches
+	for (let i = 0; i < queries.length; i += 5) {
+		const batch = queries.slice(i, i + 5);
 		const results = await Promise.all(
 			batch.map(async (q) => {
 				try {
-					const searchResults = await braveSearch(braveApiKey, q, 8);
+					// Increase results per query to 12 for more comprehensive coverage
+					const searchResults = await braveSearch(braveApiKey, q, 12);
 					return searchResults
-						.map((r) => `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`)
+						.map((r) => {
+							let entry = `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`;
+							if (r.thumbnail) {
+								entry += `\nThumbnail: ${r.thumbnail}`;
+							}
+							return entry;
+						})
 						.join('\n\n');
 				} catch (err) {
-					// Sanitized error logging - don't expose query details or full error
 					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
 					console.error(`Search batch failed: ${errorMessage.slice(0, 100)}`);
 					return '';
@@ -185,9 +202,16 @@ export async function runSearchOrchestrator(
 		allResults.push(...results.filter(Boolean));
 	}
 
+	// Also run an image search for product images (in parallel with processing)
+	try {
+		const images = await braveImageSearch(braveApiKey, `${context.query} product`, 10);
+		imageResults.push(...images);
+	} catch {
+		// Image search is optional, continue without it
+	}
+
 	// Build context for Claude
 	const searchResultsText = allResults.join('\n\n---\n\n');
-
 	const profileContext = buildProfileContext(context.profile);
 
 	// Run orchestrator to extract products
@@ -203,21 +227,41 @@ export async function runSearchOrchestrator(
 
 ${profileContext}
 
-## Search Results
+## Search Results (${allResults.length} sources)
 ${searchResultsText}
 
 ---
 
-Extract all products that match the criteria. Output each product as a JSON object on its own line. Only output JSON, no explanations.`
+Extract ALL products that match or could match the criteria. Be thorough - extract 20-40 products. Output each product as a JSON object on its own line.`
 			}
 		]
 	});
 
-	// Track token usage from orchestrator call
 	const orchestratorUsage = orchestratorResponse.usage;
 
 	// Parse products from response
-	const rawProducts = parseProductsFromResponse(orchestratorResponse);
+	let rawProducts = parseProductsFromResponse(orchestratorResponse);
+
+	// Post-process: fix URLs and try to add images
+	rawProducts = rawProducts.map(product => {
+		// Fix retailer URLs that might be search pages
+		const fixedUrl = buildProductUrl(product.retailer, product.name, product.url);
+
+		// Try to find a matching image from our image search results
+		let imageUrl = product.image_url;
+		if (!imageUrl && imageResults.length > 0) {
+			const matchingImage = findMatchingImage(product.name, imageResults);
+			if (matchingImage) {
+				imageUrl = validateImageUrl(matchingImage);
+			}
+		}
+
+		return {
+			...product,
+			url: fixedUrl,
+			image_url: imageUrl
+		};
+	});
 
 	if (rawProducts.length === 0) {
 		return {
@@ -226,7 +270,7 @@ Extract all products that match the criteria. Output each product as a JSON obje
 			usage: {
 				input_tokens: orchestratorUsage.input_tokens,
 				output_tokens: orchestratorUsage.output_tokens,
-				api_calls: 1
+				api_calls: 2 // Count image search as well
 			}
 		};
 	}
@@ -249,21 +293,19 @@ ${JSON.stringify(rawProducts, null, 2)}
 
 ---
 
-Select the 5 best products and add match_score and match_reason to each. Output as a JSON array.`
+Select the 5 BEST products. Add match_score (0-100) and match_reason (1-2 sentences, speak directly to user) to each. Output as a JSON array.`
 			}
 		]
 	});
 
-	// Track token usage from curator call
 	const curatorUsage = curatorResponse.usage;
-
 	const curatedProducts = parseCuratedProducts(curatorResponse);
 
-	// Calculate total token usage across both API calls
+	// Calculate total token usage
 	const totalUsage = {
 		input_tokens: orchestratorUsage.input_tokens + curatorUsage.input_tokens,
 		output_tokens: orchestratorUsage.output_tokens + curatorUsage.output_tokens,
-		api_calls: 2
+		api_calls: 3 // web search batch + image search + 2 Claude calls
 	};
 
 	return {
@@ -271,6 +313,23 @@ Select the 5 best products and add match_score and match_reason to each. Output 
 		curated: curatedProducts,
 		usage: totalUsage
 	};
+}
+
+// Find a matching image from image search results based on product name
+function findMatchingImage(productName: string, images: BraveImageResult[]): string | null {
+	const nameLower = productName.toLowerCase();
+	const nameWords = nameLower.split(/\s+/).filter(w => w.length > 3);
+
+	for (const image of images) {
+		const titleLower = image.title.toLowerCase();
+		// Check if at least 2 significant words match
+		const matches = nameWords.filter(word => titleLower.includes(word));
+		if (matches.length >= 2) {
+			return image.thumbnail || image.url;
+		}
+	}
+
+	return null;
 }
 
 function buildProfileContext(profile: SearchContext['profile']): string {
@@ -317,59 +376,148 @@ function parseProductsFromResponse(response: Anthropic.Message): SavedProduct[] 
 
 	const text = content.text;
 
-	// Try to find JSON objects in the response
-	const jsonPattern = /\{[^{}]*"name"[^{}]*\}/g;
-	const matches = text.match(jsonPattern);
+	// Multiple parsing strategies for robustness
 
-	if (matches) {
-		for (const match of matches) {
+	// Strategy 1: Try to find a JSON array first
+	const arrayMatch = text.match(/\[[\s\S]*?\]/);
+	if (arrayMatch) {
+		try {
+			const parsed = JSON.parse(arrayMatch[0]);
+			if (Array.isArray(parsed)) {
+				for (const product of parsed) {
+					const validated = validateAndSanitizeProduct(product);
+					if (validated) products.push(validated);
+				}
+				if (products.length > 0) return products;
+			}
+		} catch {
+			// Continue to other strategies
+		}
+	}
+
+	// Strategy 2: Parse line by line (most reliable for streaming-style output)
+	const lines = text.split('\n');
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
 			try {
-				const product = JSON.parse(match);
-
-				// Validate required fields
-				if (!product.name || !product.price_current || !product.url || !product.retailer) {
-					continue;
-				}
-
-				// SECURITY: Validate and sanitize URLs
-				const validatedUrl = validateProductUrl(product.url);
-				if (!validatedUrl) {
-					// Skip products with invalid/unsafe URLs
-					continue;
-				}
-
-				// Validate image URL if provided
-				const validatedImageUrl = product.image_url
-					? validateImageUrl(product.image_url)
-					: undefined;
-
-				// Sanitize string fields to prevent XSS (even though Svelte escapes)
-				const sanitizedName = String(product.name).slice(0, 500);
-				const sanitizedRetailer = String(product.retailer).slice(0, 100);
-				const sanitizedDescription = product.description
-					? String(product.description).slice(0, 2000)
-					: undefined;
-
-				products.push({
-					name: sanitizedName,
-					price_current: Math.abs(Number(product.price_current)) || 0,
-					price_original: product.price_original
-						? Math.abs(Number(product.price_original))
-						: undefined,
-					retailer: sanitizedRetailer,
-					url: validatedUrl,
-					image_url: validatedImageUrl,
-					description: sanitizedDescription,
-					confidence: Math.min(100, Math.max(0, Number(product.confidence) || 70)),
-					notes: product.notes ? String(product.notes).slice(0, 500) : undefined
-				});
+				const product = JSON.parse(trimmed);
+				const validated = validateAndSanitizeProduct(product);
+				if (validated) products.push(validated);
 			} catch {
-				// Skip invalid JSON
+				// Not valid JSON, continue
 			}
 		}
 	}
 
+	if (products.length > 0) return products;
+
+	// Strategy 3: Regex to find JSON objects (handles nested braces better)
+	const jsonObjects: string[] = [];
+	let depth = 0;
+	let start = -1;
+
+	for (let i = 0; i < text.length; i++) {
+		if (text[i] === '{') {
+			if (depth === 0) start = i;
+			depth++;
+		} else if (text[i] === '}') {
+			depth--;
+			if (depth === 0 && start !== -1) {
+				jsonObjects.push(text.slice(start, i + 1));
+				start = -1;
+			}
+		}
+	}
+
+	for (const jsonStr of jsonObjects) {
+		try {
+			const product = JSON.parse(jsonStr);
+			const validated = validateAndSanitizeProduct(product);
+			if (validated) products.push(validated);
+		} catch {
+			// Skip invalid JSON
+		}
+	}
+
 	return products;
+}
+
+// Validate and sanitize a product object
+function validateAndSanitizeProduct(product: any): SavedProduct | null {
+	// Must have name and either URL or retailer
+	if (!product.name) return null;
+
+	// Price can be missing (we'll estimate or mark low confidence)
+	const priceValue = product.price_current || product.price || product.priceInCents || 0;
+	let priceCurrent = 0;
+
+	if (typeof priceValue === 'string') {
+		// Handle string prices like "$49.99" or "49.99"
+		const cleaned = priceValue.replace(/[$,]/g, '');
+		const parsed = parseFloat(cleaned);
+		if (!isNaN(parsed)) {
+			// If it looks like dollars (has decimal or is small), convert to cents
+			priceCurrent = parsed < 1000 ? Math.round(parsed * 100) : Math.round(parsed);
+		}
+	} else if (typeof priceValue === 'number') {
+		// If price is less than 1000, assume it's dollars and convert
+		priceCurrent = priceValue < 1000 ? Math.round(priceValue * 100) : Math.round(priceValue);
+	}
+
+	// URL validation
+	const url = product.url || product.link || product.productUrl;
+	const validatedUrl = validateProductUrl(url);
+	if (!validatedUrl) return null;
+
+	// Extract retailer from URL if not provided
+	let retailer = product.retailer || product.store || product.merchant || '';
+	if (!retailer && validatedUrl) {
+		try {
+			const urlObj = new URL(validatedUrl);
+			retailer = urlObj.hostname.replace(/^www\./, '');
+		} catch {
+			retailer = 'unknown';
+		}
+	}
+
+	// Validate image URL if provided
+	const imageUrl = product.image_url || product.imageUrl || product.image || product.thumbnail;
+	const validatedImageUrl = imageUrl ? validateImageUrl(imageUrl) : undefined;
+
+	// Sanitize string fields
+	const sanitizedName = String(product.name).slice(0, 500);
+	const sanitizedRetailer = String(retailer).slice(0, 100);
+	const sanitizedDescription = product.description
+		? String(product.description).slice(0, 2000)
+		: undefined;
+
+	// Handle original price
+	let priceOriginal: number | undefined;
+	const origValue = product.price_original || product.originalPrice || product.wasPrice;
+	if (origValue) {
+		if (typeof origValue === 'string') {
+			const cleaned = origValue.replace(/[$,]/g, '');
+			const parsed = parseFloat(cleaned);
+			if (!isNaN(parsed)) {
+				priceOriginal = parsed < 1000 ? Math.round(parsed * 100) : Math.round(parsed);
+			}
+		} else if (typeof origValue === 'number') {
+			priceOriginal = origValue < 1000 ? Math.round(origValue * 100) : Math.round(origValue);
+		}
+	}
+
+	return {
+		name: sanitizedName,
+		price_current: Math.abs(priceCurrent),
+		price_original: priceOriginal ? Math.abs(priceOriginal) : undefined,
+		retailer: sanitizedRetailer,
+		url: validatedUrl,
+		image_url: validatedImageUrl,
+		description: sanitizedDescription,
+		confidence: Math.min(100, Math.max(0, Number(product.confidence) || (priceCurrent > 0 ? 70 : 50))),
+		notes: product.notes ? String(product.notes).slice(0, 500) : undefined
+	};
 }
 
 function parseCuratedProducts(response: Anthropic.Message): SavedProduct[] {

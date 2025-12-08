@@ -39,11 +39,19 @@ export interface BraveSearchResult {
 	url: string;
 	description: string;
 	age?: string;
+	thumbnail?: string;
+}
+
+export interface BraveImageResult {
+	title: string;
+	url: string;
+	thumbnail: string;
+	source: string;
 }
 
 export interface BraveSearchResponse {
 	web?: {
-		results: BraveSearchResult[];
+		results: Array<BraveSearchResult & { thumbnail?: { src: string } }>;
 	};
 }
 

@@ -67,19 +67,82 @@ export class AnthropicProvider implements AIProvider {
 	}
 }
 
-// DeepSeek Provider (placeholder)
+// DeepSeek Provider - OpenAI-compatible API
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+
 export class DeepSeekProvider implements AIProvider {
-	supportsTools = false;
+	supportsTools = true;
 	private apiKey: string;
 
 	constructor(apiKey: string) {
+		if (!apiKey) {
+			throw new Error('DeepSeek API key not provided');
+		}
 		this.apiKey = apiKey;
 	}
 
 	async generate(options: GenerateOptions): Promise<ProviderResponse> {
-		// TODO: Implement DeepSeek API call
-		throw new Error('DeepSeek provider not yet implemented');
+		const messages: Array<{ role: string; content: string }> = [];
+
+		if (options.system) {
+			messages.push({ role: 'system', content: options.system });
+		}
+
+		for (const msg of options.messages) {
+			messages.push({ role: msg.role, content: msg.content });
+		}
+
+		const response = await fetch(DEEPSEEK_API_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${this.apiKey}`,
+			},
+			body: JSON.stringify({
+				model: options.model || 'deepseek-chat',
+				messages,
+				max_tokens: options.max_tokens,
+				temperature: options.temperature ?? 0.7,
+			}),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`DeepSeek API error: ${response.status} - ${errorText.slice(0, 200)}`);
+		}
+
+		const data = await response.json() as DeepSeekResponse;
+
+		const content = data.choices?.[0]?.message?.content || '';
+
+		return {
+			content,
+			usage: {
+				input_tokens: data.usage?.prompt_tokens || 0,
+				output_tokens: data.usage?.completion_tokens || 0,
+			},
+		};
 	}
+}
+
+interface DeepSeekResponse {
+	id: string;
+	object: string;
+	created: number;
+	model: string;
+	choices: Array<{
+		index: number;
+		message: {
+			role: string;
+			content: string | null;
+		};
+		finish_reason: string;
+	}>;
+	usage: {
+		prompt_tokens: number;
+		completion_tokens: number;
+		total_tokens: number;
+	};
 }
 
 // Kimi Provider (placeholder)
