@@ -1,10 +1,13 @@
 // Scout - D1 → R2 Migration
 // Automatically migrates search results older than 7 days to R2 storage
 
-import { storeResultsInR2 } from './r2';
+import { storeResultsInR2, generateR2Key } from './r2';
+import { AGENT_CONFIG } from './agents/config';
 
-const MIGRATION_AGE_DAYS = 7;
-const BATCH_SIZE = 50;
+// Configuration - uses AGENT_CONFIG for consistency
+const MIGRATION_AGE_DAYS = AGENT_CONFIG.migration?.migrationAgeDays || 7;
+const BATCH_SIZE = AGENT_CONFIG.migration?.migrationBatchSize || 50;
+const PARALLEL_BATCH_SIZE = AGENT_CONFIG.migration?.parallelMigrations || 5;
 
 export interface MigrationStats {
 	checked: number;
@@ -64,55 +67,97 @@ export async function migrateOldResults(
 		stats.checked = results.results?.length ?? 0;
 		console.log(`[Migration] Found ${stats.checked} results to migrate`);
 
-		for (const result of results.results ?? []) {
-			try {
-				// Skip if results are empty/invalid
-				if (!result.results_raw || !result.results_curated) {
-					stats.skipped++;
-					continue;
+		// Process in parallel batches for better performance
+		const resultsArray = results.results ?? [];
+		for (let i = 0; i < resultsArray.length; i += PARALLEL_BATCH_SIZE) {
+			const batch = resultsArray.slice(i, i + PARALLEL_BATCH_SIZE);
+
+			const batchResults = await Promise.allSettled(
+				batch.map(async (result) => {
+					// Skip if results are empty/invalid
+					if (!result.results_raw || !result.results_curated) {
+						return { status: 'skipped' as const, searchId: result.search_id };
+					}
+
+					// Calculate R2 key for idempotency check
+					const expectedR2Key = generateR2Key(result.search_id, result.created_at);
+
+					// Idempotency check: see if R2 object already exists
+					// This handles the case where a previous migration stored to R2 but failed
+					// to update D1 (crash between R2 store and D1 update)
+					const existingObject = await r2.head(expectedR2Key);
+					if (existingObject) {
+						// R2 object already exists - just update D1 to link to it
+						const now = new Date().toISOString();
+						const updateResult = await db
+							.prepare(
+								`UPDATE search_results
+								 SET r2_key = ?,
+								     migrated_at = ?,
+								     results_raw = NULL
+								 WHERE id = ? AND r2_key IS NULL`
+							)
+							.bind(expectedR2Key, now, result.id)
+							.run();
+
+						if (updateResult.meta?.changes === 0) {
+							return { status: 'skipped' as const, searchId: result.search_id };
+						}
+						console.log(`[Migration] Linked existing R2 object ${result.search_id} → ${expectedR2Key}`);
+						return { status: 'migrated' as const, searchId: result.search_id, r2Key: expectedR2Key };
+					}
+
+					// Store in R2
+					const r2Key = await storeResultsInR2(
+						r2,
+						result.search_id,
+						result.query_freeform,
+						result.results_raw,
+						result.results_curated,
+						result.share_token,
+						result.cache_key,
+						result.created_at,
+						result.expires_at
+					);
+
+					// Update D1 record - set r2_key and clear raw data to save space
+					// Keep results_curated for quick access (it's small)
+					// Use WHERE r2_key IS NULL to prevent race conditions if cron runs twice
+					const now = new Date().toISOString();
+					const updateResult = await db
+						.prepare(
+							`UPDATE search_results
+							 SET r2_key = ?,
+							     migrated_at = ?,
+							     results_raw = NULL
+							 WHERE id = ? AND r2_key IS NULL`
+						)
+						.bind(r2Key, now, result.id)
+						.run();
+
+					// Check if the update actually happened (rows affected)
+					if (updateResult.meta?.changes === 0) {
+						// Already migrated by another process
+						return { status: 'skipped' as const, searchId: result.search_id };
+					}
+
+					console.log(`[Migration] Migrated ${result.search_id} → ${r2Key}`);
+					return { status: 'migrated' as const, searchId: result.search_id, r2Key };
+				})
+			);
+
+			// Aggregate results from this batch
+			for (const result of batchResults) {
+				if (result.status === 'fulfilled') {
+					if (result.value.status === 'migrated') {
+						stats.migrated++;
+					} else if (result.value.status === 'skipped') {
+						stats.skipped++;
+					}
+				} else {
+					stats.failed++;
+					console.error(`[Migration] Failed to migrate:`, result.reason);
 				}
-
-				// Store in R2
-				const r2Key = await storeResultsInR2(
-					r2,
-					result.search_id,
-					result.query_freeform,
-					result.results_raw,
-					result.results_curated,
-					result.share_token,
-					result.cache_key,
-					result.created_at,
-					result.expires_at
-				);
-
-				// Update D1 record - set r2_key and clear raw data to save space
-				// Keep results_curated for quick access (it's small)
-				// Use WHERE r2_key IS NULL to prevent race conditions if cron runs twice
-				const now = new Date().toISOString();
-				const updateResult = await db
-					.prepare(
-						`UPDATE search_results
-						 SET r2_key = ?,
-						     migrated_at = ?,
-						     results_raw = NULL
-						 WHERE id = ? AND r2_key IS NULL`
-					)
-					.bind(r2Key, now, result.id)
-					.run();
-
-				// Check if the update actually happened (rows affected)
-				if (updateResult.meta?.changes === 0) {
-					// Already migrated by another process, skip
-					stats.skipped++;
-					console.log(`[Migration] Skipped ${result.search_id} - already migrated`);
-					continue;
-				}
-
-				stats.migrated++;
-				console.log(`[Migration] Migrated ${result.search_id} → ${r2Key}`);
-			} catch (err) {
-				stats.failed++;
-				console.error(`[Migration] Failed to migrate ${result.search_id}:`, err);
 			}
 		}
 
@@ -295,5 +340,88 @@ export async function forceMigrateResult(
 		return { success: true, r2Key };
 	} catch (err) {
 		return { success: false, error: String(err) };
+	}
+}
+
+/**
+ * Clean up orphaned R2 objects that don't have corresponding D1 records
+ * This handles the case where a migration stored to R2 but crashed before updating D1
+ * and the D1 record was subsequently deleted or the migration was retried with a different key
+ *
+ * Should be run periodically (e.g., weekly) to clean up any orphaned objects
+ */
+export async function cleanupOrphanedR2Objects(
+	db: D1Database,
+	r2: R2Bucket,
+	options: { dryRun?: boolean; maxObjects?: number } = {}
+): Promise<{ scanned: number; orphaned: number; deleted: number }> {
+	const defaultMaxObjects = AGENT_CONFIG.migration?.orphanScanLimit || 1000;
+	const { dryRun = false, maxObjects = defaultMaxObjects } = options;
+	const stats = { scanned: 0, orphaned: 0, deleted: 0 };
+
+	console.log(`[Cleanup] Scanning for orphaned R2 objects${dryRun ? ' (dry run)' : ''}...`);
+
+	try {
+		// List R2 objects with the results/ prefix
+		let cursor: string | undefined;
+		const orphanedKeys: string[] = [];
+
+		do {
+			const listResult = await r2.list({
+				prefix: 'results/',
+				limit: 100,
+				cursor
+			});
+
+			for (const object of listResult.objects) {
+				stats.scanned++;
+
+				// Check if this R2 key has a corresponding D1 record
+				const dbRecord = await db
+					.prepare('SELECT id FROM search_results WHERE r2_key = ? LIMIT 1')
+					.bind(object.key)
+					.first<{ id: string }>();
+
+				if (!dbRecord) {
+					// This R2 object has no corresponding D1 record - it's orphaned
+					orphanedKeys.push(object.key);
+					console.log(`[Cleanup] Found orphaned R2 object: ${object.key}`);
+				}
+
+				// Stop if we've hit the max
+				if (stats.scanned >= maxObjects) {
+					cursor = undefined;
+					break;
+				}
+			}
+
+			cursor = listResult.truncated ? listResult.cursor : undefined;
+		} while (cursor);
+
+		stats.orphaned = orphanedKeys.length;
+
+		// Delete orphaned objects (unless dry run)
+		if (!dryRun && orphanedKeys.length > 0) {
+			const deleteResults = await Promise.allSettled(
+				orphanedKeys.map((key) => r2.delete(key))
+			);
+
+			for (const result of deleteResults) {
+				if (result.status === 'fulfilled') {
+					stats.deleted++;
+				} else {
+					console.error(`[Cleanup] Failed to delete orphaned R2 object:`, result.reason);
+				}
+			}
+		}
+
+		console.log(
+			`[Cleanup] Complete - scanned: ${stats.scanned}, orphaned: ${stats.orphaned}, deleted: ${stats.deleted}`
+		);
+
+		return stats;
+	} catch (err) {
+		console.error('[Cleanup] Orphan cleanup failed:', err);
+		throw err;
 	}
 }

@@ -1,19 +1,26 @@
 // Scout - Tavily Search Integration
 // Tavily provides AI-optimized web search with better product extraction
 
-export interface TavilySearchResult {
-	title: string;
-	url: string;
-	content: string;
-	score: number;
-	published_date?: string;
-}
+import { z } from 'zod';
 
-export interface TavilySearchResponse {
-	results: TavilySearchResult[];
-	query: string;
-	response_time: number;
-}
+// Zod schema for runtime validation of Tavily API responses
+const TavilySearchResultSchema = z.object({
+	title: z.string(),
+	url: z.string().url(),
+	content: z.string(),
+	score: z.number().min(0).max(1),
+	published_date: z.string().optional()
+});
+
+const TavilySearchResponseSchema = z.object({
+	results: z.array(TavilySearchResultSchema),
+	query: z.string(),
+	response_time: z.number()
+});
+
+// Export types derived from Zod schemas for type safety
+export type TavilySearchResult = z.infer<typeof TavilySearchResultSchema>;
+export type TavilySearchResponse = z.infer<typeof TavilySearchResponseSchema>;
 
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 
@@ -69,9 +76,17 @@ export async function tavilySearch(
 		throw new Error(`Tavily Search failed: ${response.status} - ${errorText}`);
 	}
 
-	const data: TavilySearchResponse = await response.json();
+	const json = await response.json();
 
-	return data.results || [];
+	// Validate response with Zod schema
+	const parseResult = TavilySearchResponseSchema.safeParse(json);
+	if (!parseResult.success) {
+		console.error('[Tavily] Invalid API response:', parseResult.error.format());
+		// Return empty results rather than crash on unexpected format
+		return [];
+	}
+
+	return parseResult.data.results;
 }
 
 /**

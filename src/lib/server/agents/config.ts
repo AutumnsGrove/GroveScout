@@ -34,6 +34,33 @@ export const AGENT_CONFIG = {
 
 		// Batch size for parallel search requests
 		searchBatchSize: 5,
+
+		// Number of image search results to fetch
+		imageSearchCount: 10,
+	},
+
+	// Image/Vision Configuration
+	vision: {
+		// Timeout for image URL validation (ms) - 10s for slow CDNs
+		validationTimeoutMs: 10000,
+
+		// Maximum image file size (bytes) - 10MB
+		maxImageSizeBytes: 10 * 1024 * 1024,
+	},
+
+	// Migration Configuration
+	migration: {
+		// Age threshold for auto-migration to R2 (days)
+		migrationAgeDays: 7,
+
+		// Batch size for migration queries
+		migrationBatchSize: 50,
+
+		// Number of concurrent migration operations
+		parallelMigrations: 5,
+
+		// Maximum R2 objects to scan for orphan cleanup
+		orphanScanLimit: 1000,
 	},
 
 	// Cache Configuration

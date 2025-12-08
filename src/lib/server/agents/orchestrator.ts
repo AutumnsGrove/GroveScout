@@ -6,6 +6,7 @@ import { braveSearch, braveImageSearch, buildSearchQueries, buildProductUrl } fr
 import { tavilyProductSearch, type TavilySearchResult } from './tavily';
 import type { SavedProduct, SearchContext, OrchestratorResult, BraveImageResult } from './types';
 import { AGENT_CONFIG } from './config';
+import { buildProfileContext } from './utils';
 
 // Search provider type - allows switching between Brave and Tavily
 export type SearchProvider = 'brave' | 'tavily';
@@ -356,10 +357,13 @@ async function runBraveSearch(
 
 	// Run image search
 	try {
-		const images = await braveImageSearch(braveApiKey, `${context.query} product`, 10);
+		const imageCount = AGENT_CONFIG.search?.imageSearchCount || 10;
+		const images = await braveImageSearch(braveApiKey, `${context.query} product`, imageCount);
 		imageResults.push(...images);
-	} catch {
-		// Image search is optional
+	} catch (err) {
+		// Image search is optional but log for debugging
+		const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+		console.warn(`[Orchestrator] Image search failed (non-fatal): ${errorMessage.slice(0, 100)}`);
 	}
 
 	return { textResults, imageResults };
@@ -408,41 +412,7 @@ function findMatchingImage(productName: string, images: BraveImageResult[]): str
 	return null;
 }
 
-function buildProfileContext(profile: SearchContext['profile']): string {
-	const parts: string[] = ['## User Profile'];
-
-	if (profile.sizes && Object.keys(profile.sizes).length > 0) {
-		parts.push(`**Sizes:** ${JSON.stringify(profile.sizes)}`);
-	}
-
-	if (profile.color_favorites?.length) {
-		parts.push(`**Favorite Colors:** ${profile.color_favorites.join(', ')}`);
-	}
-
-	if (profile.color_avoid?.length) {
-		parts.push(`**Colors to Avoid:** ${profile.color_avoid.join(', ')}`);
-	}
-
-	if (profile.budget_min || profile.budget_max) {
-		const min = profile.budget_min ? `$${profile.budget_min / 100}` : '$0';
-		const max = profile.budget_max ? `$${profile.budget_max / 100}` : 'any';
-		parts.push(`**Budget:** ${min} - ${max}`);
-	}
-
-	if (profile.favorite_retailers?.length) {
-		parts.push(`**Preferred Retailers:** ${profile.favorite_retailers.join(', ')}`);
-	}
-
-	if (profile.excluded_retailers?.length) {
-		parts.push(`**Excluded Retailers:** ${profile.excluded_retailers.join(', ')}`);
-	}
-
-	if (profile.style_notes) {
-		parts.push(`**Style Notes:** ${profile.style_notes}`);
-	}
-
-	return parts.join('\n');
-}
+// buildProfileContext is imported from ./utils
 
 function parseProductsFromResponse(response: Anthropic.Message): SavedProduct[] {
 	const products: SavedProduct[] = [];
@@ -466,8 +436,9 @@ function parseProductsFromResponse(response: Anthropic.Message): SavedProduct[] 
 				}
 				if (products.length > 0) return products;
 			}
-		} catch {
-			// Continue to other strategies
+		} catch (err) {
+			// Continue to other strategies, but log for debugging
+			console.debug(`[Orchestrator] JSON array parse failed, trying other strategies: ${err instanceof Error ? err.message : 'Unknown'}`);
 		}
 	}
 
@@ -506,14 +477,23 @@ function parseProductsFromResponse(response: Anthropic.Message): SavedProduct[] 
 		}
 	}
 
+	let parseFailures = 0;
 	for (const jsonStr of jsonObjects) {
 		try {
 			const product = JSON.parse(jsonStr);
 			const validated = validateAndSanitizeProduct(product);
 			if (validated) products.push(validated);
 		} catch {
-			// Skip invalid JSON
+			parseFailures++;
 		}
+	}
+
+	if (parseFailures > 0) {
+		console.debug(`[Orchestrator] Strategy 3: ${parseFailures} JSON objects failed to parse`);
+	}
+
+	if (products.length === 0) {
+		console.warn(`[Orchestrator] No products parsed from Claude response. Response preview: ${text.slice(0, 200)}...`);
 	}
 
 	return products;
@@ -598,7 +578,10 @@ function validateAndSanitizeProduct(product: any): SavedProduct | null {
 
 function parseCuratedProducts(response: Anthropic.Message): SavedProduct[] {
 	const content = response.content[0];
-	if (content.type !== 'text') return [];
+	if (content.type !== 'text') {
+		console.warn('[Orchestrator] Curator response was not text type');
+		return [];
+	}
 
 	const text = content.text;
 
@@ -613,11 +596,16 @@ function parseCuratedProducts(response: Anthropic.Message): SavedProduct[] {
 					rank: i + 1
 				}));
 			}
-		} catch {
-			// Fall through to individual parsing
+		} catch (err) {
+			// Fall through to individual parsing, but log for debugging
+			console.debug(`[Orchestrator] Curator JSON array parse failed: ${err instanceof Error ? err.message : 'Unknown'}`);
 		}
 	}
 
 	// Fall back to parsing individual objects
-	return parseProductsFromResponse(response).slice(0, 5);
+	const fallbackProducts = parseProductsFromResponse(response).slice(0, 5);
+	if (fallbackProducts.length === 0) {
+		console.warn(`[Orchestrator] No curated products parsed. Response preview: ${text.slice(0, 200)}...`);
+	}
+	return fallbackProducts;
 }

@@ -4,6 +4,110 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENT_CONFIG } from './config';
+import { buildStyleProfileContext } from './utils';
+
+// Configuration - uses AGENT_CONFIG for consistency
+const IMAGE_VALIDATION_TIMEOUT_MS = AGENT_CONFIG.vision?.validationTimeoutMs || 10000;
+const MAX_IMAGE_SIZE_BYTES = AGENT_CONFIG.vision?.maxImageSizeBytes || 10 * 1024 * 1024;
+
+/**
+ * Validate an image URL for SSRF protection
+ * Blocks internal networks, cloud metadata, and unsafe protocols
+ */
+export function validateImageUrlSafety(urlString: string): string | null {
+	if (!urlString || typeof urlString !== 'string') {
+		return null;
+	}
+
+	try {
+		const url = new URL(urlString);
+
+		// Only allow HTTPS URLs
+		if (url.protocol !== 'https:') {
+			console.warn(`[Vision] Rejected non-HTTPS URL: ${url.protocol}`);
+			return null;
+		}
+
+		// Block URLs with credentials
+		if (url.username || url.password) {
+			console.warn('[Vision] Rejected URL with credentials');
+			return null;
+		}
+
+		const hostname = url.hostname.toLowerCase();
+
+		// Block localhost
+		if (hostname === 'localhost' || hostname === 'localhost.localdomain') {
+			console.warn('[Vision] Rejected localhost URL');
+			return null;
+		}
+
+		// Block cloud metadata endpoints (AWS, GCP, Azure, etc.)
+		if (
+			hostname === '169.254.169.254' ||
+			hostname === 'metadata.google.internal' ||
+			hostname === 'metadata.goog' ||
+			hostname.endsWith('.internal')
+		) {
+			console.warn('[Vision] Rejected cloud metadata URL');
+			return null;
+		}
+
+		// Block private/internal IP ranges
+		const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+		if (ipv4Match) {
+			const [, a, b, c] = ipv4Match.map(Number);
+
+			// 127.x.x.x (loopback)
+			if (a === 127) {
+				console.warn('[Vision] Rejected loopback IP');
+				return null;
+			}
+			// 10.x.x.x (private)
+			if (a === 10) {
+				console.warn('[Vision] Rejected private IP (10.x.x.x)');
+				return null;
+			}
+			// 192.168.x.x (private)
+			if (a === 192 && b === 168) {
+				console.warn('[Vision] Rejected private IP (192.168.x.x)');
+				return null;
+			}
+			// 172.16.x.x - 172.31.x.x (private)
+			if (a === 172 && b >= 16 && b <= 31) {
+				console.warn('[Vision] Rejected private IP (172.16-31.x.x)');
+				return null;
+			}
+			// 169.254.x.x (link-local, includes AWS metadata)
+			if (a === 169 && b === 254) {
+				console.warn('[Vision] Rejected link-local IP');
+				return null;
+			}
+			// 0.x.x.x (invalid)
+			if (a === 0) {
+				console.warn('[Vision] Rejected invalid IP (0.x.x.x)');
+				return null;
+			}
+		}
+
+		// Block IPv6 localhost and private ranges
+		if (
+			hostname === '::1' ||
+			hostname === '[::1]' ||
+			hostname.startsWith('fe80:') ||
+			hostname.startsWith('fc00:') ||
+			hostname.startsWith('fd00:')
+		) {
+			console.warn('[Vision] Rejected IPv6 private/localhost');
+			return null;
+		}
+
+		return urlString;
+	} catch {
+		console.warn('[Vision] Failed to parse URL');
+		return null;
+	}
+}
 
 export interface ImageAnalysisResult {
 	description: string;
@@ -32,9 +136,15 @@ export async function analyzeProductImage(
 		style_notes?: string;
 	}
 ): Promise<ImageAnalysisResult> {
+	// SSRF protection: validate URL before sending to vision API
+	const validatedUrl = validateImageUrlSafety(imageUrl);
+	if (!validatedUrl) {
+		throw new Error('Invalid or unsafe image URL');
+	}
+
 	const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
-	const profileContext = buildProfileContext(userProfile);
+	const profileContext = buildStyleProfileContext(userProfile);
 
 	const response = await anthropic.messages.create({
 		model: AGENT_CONFIG.model.vision,
@@ -47,7 +157,7 @@ export async function analyzeProductImage(
 						type: 'image',
 						source: {
 							type: 'url',
-							url: imageUrl,
+							url: validatedUrl,
 						},
 					},
 					{
@@ -107,6 +217,14 @@ export async function compareProductStyle(
 	referenceImageUrl: string,
 	context?: string
 ): Promise<StyleComparisonResult> {
+	// SSRF protection: validate both URLs before sending to vision API
+	const validatedProductUrl = validateImageUrlSafety(productImageUrl);
+	const validatedReferenceUrl = validateImageUrlSafety(referenceImageUrl);
+
+	if (!validatedProductUrl || !validatedReferenceUrl) {
+		throw new Error('Invalid or unsafe image URL');
+	}
+
 	const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
 	const response = await anthropic.messages.create({
@@ -124,7 +242,7 @@ export async function compareProductStyle(
 						type: 'image',
 						source: {
 							type: 'url',
-							url: referenceImageUrl,
+							url: validatedReferenceUrl,
 						},
 					},
 					{
@@ -135,7 +253,7 @@ export async function compareProductStyle(
 						type: 'image',
 						source: {
 							type: 'url',
-							url: productImageUrl,
+							url: validatedProductUrl,
 						},
 					},
 					{
@@ -191,6 +309,12 @@ export async function extractProductInfo(
 	retailer?: string;
 	in_stock?: boolean;
 }> {
+	// SSRF protection: validate URL before sending to vision API
+	const validatedUrl = validateImageUrlSafety(imageUrl);
+	if (!validatedUrl) {
+		throw new Error('Invalid or unsafe image URL');
+	}
+
 	const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
 	const response = await anthropic.messages.create({
@@ -204,7 +328,7 @@ export async function extractProductInfo(
 						type: 'image',
 						source: {
 							type: 'url',
-							url: imageUrl,
+							url: validatedUrl,
 						},
 					},
 					{
@@ -244,45 +368,25 @@ Only include fields you can clearly see. Only output valid JSON.`
 	return {};
 }
 
-/**
- * Build user profile context for vision analysis
- */
-function buildProfileContext(profile: {
-	color_favorites?: string[];
-	color_avoid?: string[];
-	style_notes?: string;
-}): string {
-	const parts: string[] = ['## User Style Preferences'];
-
-	if (profile.color_favorites?.length) {
-		parts.push(`Favorite colors: ${profile.color_favorites.join(', ')}`);
-	}
-
-	if (profile.color_avoid?.length) {
-		parts.push(`Colors to avoid: ${profile.color_avoid.join(', ')}`);
-	}
-
-	if (profile.style_notes) {
-		parts.push(`Style notes: ${profile.style_notes}`);
-	}
-
-	if (parts.length === 1) {
-		return ''; // No preferences set
-	}
-
-	return parts.join('\n');
-}
+// buildStyleProfileContext is imported from ./utils
 
 /**
  * Validate that an image URL is accessible and appropriate
  * Uses timeout to prevent hanging on slow servers
+ * Note: Also performs SSRF validation before making the request
  */
 export async function validateImageUrl(imageUrl: string): Promise<boolean> {
+	// First validate for SSRF
+	const safeUrl = validateImageUrlSafety(imageUrl);
+	if (!safeUrl) {
+		return false;
+	}
+
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+	const timeout = setTimeout(() => controller.abort(), IMAGE_VALIDATION_TIMEOUT_MS);
 
 	try {
-		const response = await fetch(imageUrl, {
+		const response = await fetch(safeUrl, {
 			method: 'HEAD',
 			signal: controller.signal
 		});
@@ -293,9 +397,9 @@ export async function validateImageUrl(imageUrl: string): Promise<boolean> {
 		const contentType = response.headers.get('content-type');
 		if (!contentType?.startsWith('image/')) return false;
 
-		// Check content length isn't too large (10MB limit)
+		// Check content length isn't too large
 		const contentLength = response.headers.get('content-length');
-		if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) return false;
+		if (contentLength && parseInt(contentLength) > MAX_IMAGE_SIZE_BYTES) return false;
 
 		return true;
 	} catch {
