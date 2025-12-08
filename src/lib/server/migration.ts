@@ -10,6 +10,49 @@ const MIGRATION_AGE_DAYS = AGENT_CONFIG.migration?.migrationAgeDays || 7;
 const BATCH_SIZE = AGENT_CONFIG.migration?.migrationBatchSize || 50;
 const PARALLEL_BATCH_SIZE = AGENT_CONFIG.migration?.parallelMigrations || 5;
 
+/**
+ * Safely batch delete records from D1 using parameterized IN clause
+ * This helper ensures SQL injection safety by always using '?' placeholders
+ * and binding values separately.
+ *
+ * @param db - D1 database instance
+ * @param ids - Array of IDs to delete (must be non-empty)
+ * @returns Number of deleted rows
+ */
+async function safeBatchDelete(db: D1Database, ids: string[]): Promise<number> {
+	if (ids.length === 0) return 0;
+
+	// Generate placeholder string: always '?' characters, never interpolated values
+	// This is safe because we're only generating the placeholder pattern, not values
+	const placeholders = ids.map(() => '?').join(', ');
+	const result = await db
+		.prepare(`DELETE FROM search_results WHERE id IN (${placeholders})`)
+		.bind(...ids)
+		.run();
+
+	return result.meta?.changes ?? ids.length;
+}
+
+/**
+ * Batch check which R2 keys exist in D1
+ * Used by orphan cleanup to avoid N+1 queries
+ *
+ * @param db - D1 database instance
+ * @param r2Keys - Array of R2 keys to check
+ * @returns Set of R2 keys that exist in D1
+ */
+async function batchCheckR2KeysExist(db: D1Database, r2Keys: string[]): Promise<Set<string>> {
+	if (r2Keys.length === 0) return new Set();
+
+	const placeholders = r2Keys.map(() => '?').join(', ');
+	const result = await db
+		.prepare(`SELECT r2_key FROM search_results WHERE r2_key IN (${placeholders})`)
+		.bind(...r2Keys)
+		.all<{ r2_key: string }>();
+
+	return new Set((result.results ?? []).map(r => r.r2_key));
+}
+
 export interface MigrationStats {
 	checked: number;
 	migrated: number;
@@ -259,16 +302,9 @@ export async function cleanupExpiredResults(
 			}
 		});
 
-		// Batch delete from D1 using IN clause for successful R2 deletes
-		// SAFETY: Placeholders are always '?' literals, values are bound via .bind()
-		// Do NOT modify to interpolate actual values into the SQL string
+		// Batch delete from D1 using safe helper
 		if (successfulDeletes.length > 0) {
-			const placeholders = successfulDeletes.map(() => '?').join(', ');
-			await db
-				.prepare(`DELETE FROM search_results WHERE id IN (${placeholders})`)
-				.bind(...successfulDeletes)
-				.run();
-			deleted = successfulDeletes.length;
+			deleted = await safeBatchDelete(db, successfulDeletes);
 		}
 
 		console.log(`[Cleanup] Deleted ${deleted} expired results`);
@@ -382,26 +418,23 @@ export async function cleanupOrphanedR2Objects(
 				cursor
 			});
 
-			for (const object of listResult.objects) {
-				stats.scanned++;
+			const batchKeys = listResult.objects.map(obj => obj.key);
+			stats.scanned += batchKeys.length;
 
-				// Check if this R2 key has a corresponding D1 record
-				const dbRecord = await db
-					.prepare('SELECT id FROM search_results WHERE r2_key = ? LIMIT 1')
-					.bind(object.key)
-					.first<{ id: string }>();
+			// Batch check which keys exist in D1 (fixes N+1 query pattern)
+			const existingKeys = await batchCheckR2KeysExist(db, batchKeys);
 
-				if (!dbRecord) {
-					// This R2 object has no corresponding D1 record - it's orphaned
-					orphanedKeys.push(object.key);
-					console.log(`[Cleanup] Found orphaned R2 object: ${object.key}`);
+			// Find orphaned keys (in R2 but not in D1)
+			for (const key of batchKeys) {
+				if (!existingKeys.has(key)) {
+					orphanedKeys.push(key);
+					console.log(`[Cleanup] Found orphaned R2 object: ${key}`);
 				}
+			}
 
-				// Stop if we've hit the max
-				if (stats.scanned >= maxObjects) {
-					cursor = undefined;
-					break;
-				}
+			// Stop if we've hit the max objects to scan
+			if (stats.scanned >= maxObjects) {
+				break;
 			}
 
 			cursor = listResult.truncated ? listResult.cursor : undefined;

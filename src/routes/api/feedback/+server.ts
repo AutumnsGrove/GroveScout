@@ -65,9 +65,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		return json({ success: true });
 	} catch (err) {
 		console.error('Failed to store feedback:', err);
-		// Don't expose error details, but still return success to not break UX
-		// Feedback is non-critical
-		return json({ success: true });
+		// Return failure with generic message - frontend can handle gracefully
+		// Don't expose internal error details but let caller know it failed
+		return json({ success: false, error: 'Failed to save feedback' }, { status: 500 });
 	}
 };
 
@@ -114,6 +114,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 		return json({ success: true, data: stats });
 	} catch (err) {
 		console.error('Failed to get feedback stats:', err);
-		return json({ success: true, data: { up: 0, down: 0 } });
+		// Return failure with generic message - don't hide errors
+		return json({ success: false, error: 'Failed to retrieve feedback stats' }, { status: 500 });
 	}
 };

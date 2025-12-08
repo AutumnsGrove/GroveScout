@@ -103,7 +103,9 @@ function validateImageUrl(urlString: string | undefined): string | null {
 
 		// Check for common image extensions or CDN patterns
 		const pathname = url.pathname.toLowerCase();
-		const hasImageExtension = /\.(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(pathname);
+		const supportedExtensions = AGENT_CONFIG.vision.supportedExtensions.join('|');
+		const extensionRegex = new RegExp(`\\.(${supportedExtensions})$`, 'i');
+		const hasImageExtension = extensionRegex.test(pathname);
 		const isCommonCDN = /\.(cloudfront\.net|cloudinary\.com|imgix\.net|akamaized\.net|shopify\.com)$/i.test(url.hostname);
 
 		if (!hasImageExtension && !isCommonCDN) {
@@ -119,6 +121,8 @@ function validateImageUrl(urlString: string | undefined): string | null {
 	}
 }
 
+// Build the orchestrator prompt with configurable threshold
+const MIN_CONFIDENCE = AGENT_CONFIG.search.minConfidenceThreshold;
 const ORCHESTRATOR_SYSTEM_PROMPT = `You are Scout, a comprehensive shopping research assistant. Your mission is to find AS MANY relevant products as possible matching the user's criteria.
 
 IMPORTANT: Be THOROUGH. Extract EVERY product that could match - we want 20-40 products minimum. Don't be selective at this stage - that's the curator's job.
@@ -143,8 +147,8 @@ EXTRACTION RULES:
 6. **Confidence scoring**:
    - 90-100: Perfect match, in budget, from preferred retailer
    - 70-89: Good match, reasonable price
-   - 50-69: Partial match or missing info
-   - Below 50: Skip this product
+   - ${MIN_CONFIDENCE}-69: Partial match or missing info
+   - Below ${MIN_CONFIDENCE}: Skip this product
 
 OUTPUT FORMAT: One JSON object per line, no markdown formatting, no explanations.`;
 

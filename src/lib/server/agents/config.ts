@@ -37,6 +37,10 @@ export const AGENT_CONFIG = {
 
 		// Number of image search results to fetch
 		imageSearchCount: 10,
+
+		// Minimum confidence threshold for products (0-100)
+		// Products below this are filtered out as low-quality matches
+		minConfidenceThreshold: 50,
 	},
 
 	// Image/Vision Configuration
@@ -46,6 +50,9 @@ export const AGENT_CONFIG = {
 
 		// Maximum image file size (bytes) - 10MB
 		maxImageSizeBytes: 10 * 1024 * 1024,
+
+		// Supported image file extensions for validation
+		supportedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'],
 	},
 
 	// Migration Configuration
