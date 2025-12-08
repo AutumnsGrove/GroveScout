@@ -9,7 +9,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 		throw error(401, 'Unauthorized');
 	}
 
-	const { DB } = platform.env;
+	const { DB, R2 } = platform.env;
 	const search = await getSearchById(DB, params.id);
 
 	if (!search) {
@@ -25,7 +25,8 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	let shareToken: string | null = null;
 
 	if (search.status === 'completed') {
-		const searchResult = await getSearchResultBySearchId(DB, search.id);
+		// Pass R2 bucket to handle migrated results
+		const searchResult = await getSearchResultBySearchId(DB, search.id, R2);
 		if (searchResult) {
 			try {
 				results = JSON.parse(searchResult.results_curated);

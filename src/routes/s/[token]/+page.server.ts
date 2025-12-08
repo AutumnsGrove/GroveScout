@@ -9,8 +9,9 @@ export const load: PageServerLoad = async ({ params, platform }) => {
 		throw error(500, 'Platform not available');
 	}
 
-	const { DB } = platform.env;
-	const result = await getSearchResultByShareToken(DB, params.token);
+	const { DB, R2 } = platform.env;
+	// Pass R2 bucket to handle migrated results
+	const result = await getSearchResultByShareToken(DB, params.token, R2);
 
 	if (!result) {
 		throw error(404, 'Results not found or expired');

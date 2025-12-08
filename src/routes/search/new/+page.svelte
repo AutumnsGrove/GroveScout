@@ -10,6 +10,7 @@
 	let isSubmitting = $state(false);
 	let error = $state<string | null>(null);
 	let advanced = $state(false);
+	let searchProvider = $state<'brave' | 'tavily'>('brave');
 
 	// Check for pre-filled query from URL
 	onMount(() => {
@@ -37,7 +38,10 @@
 			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ query: value.trim() })
+				body: JSON.stringify({
+					query: value.trim(),
+					searchProvider
+				})
 			});
 
 			const result: ApiResponse = await response.json();
@@ -108,6 +112,40 @@
 					<Icons name="clock" size="sm" />
 					{advanced ? 'Results in 5-10 min (multi‑batch)' : 'Results in 2-3 min'}
 				</span>
+			</div>
+
+			<!-- Search Provider Selector -->
+			<div class="mt-4 pt-4 border-t border-cream-300 dark:border-bark-600">
+				<label class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-2">
+					Search Engine
+				</label>
+				<div class="flex gap-3">
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input
+							type="radio"
+							name="searchProvider"
+							value="brave"
+							bind:group={searchProvider}
+							class="border-cream-400 dark:border-bark-500 text-grove-600 focus:ring-grove-500"
+						/>
+						<span class="text-sm text-bark-600 dark:text-cream-400">Brave Search</span>
+					</label>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input
+							type="radio"
+							name="searchProvider"
+							value="tavily"
+							bind:group={searchProvider}
+							class="border-cream-400 dark:border-bark-500 text-grove-600 focus:ring-grove-500"
+						/>
+						<span class="text-sm text-bark-600 dark:text-cream-400">Tavily</span>
+					</label>
+				</div>
+				<p class="text-xs text-bark-400 dark:text-cream-500 mt-1">
+					{searchProvider === 'brave'
+						? 'Brave Search with comprehensive image search'
+						: 'Tavily AI-optimized search for better product extraction'}
+				</p>
 			</div>
 
 			<!-- Advanced search toggle -->

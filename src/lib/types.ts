@@ -179,6 +179,7 @@ export interface SearchJob {
 	query_freeform: string | null;
 	query_structured: ParsedQuery | null;
 	profile: ProfileContext;
+	searchProvider?: 'brave' | 'tavily';
 }
 
 export interface ProfileContext {
@@ -243,7 +244,8 @@ export const SearchInputSchema = z.object({
 			brands: z.array(z.string()).optional(),
 			exclude_brands: z.array(z.string()).optional()
 		})
-		.optional()
+		.optional(),
+	searchProvider: z.enum(['brave', 'tavily']).optional().default('brave')
 });
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;

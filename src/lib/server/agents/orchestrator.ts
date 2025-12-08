@@ -3,8 +3,12 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { braveSearch, braveImageSearch, buildSearchQueries, buildProductUrl } from './brave';
+import { tavilyProductSearch, type TavilySearchResult } from './tavily';
 import type { SavedProduct, SearchContext, OrchestratorResult, BraveImageResult } from './types';
 import { AGENT_CONFIG } from './config';
+
+// Search provider type - allows switching between Brave and Tavily
+export type SearchProvider = 'brave' | 'tavily';
 
 // Known safe retail domains (partial list - expand as needed)
 const KNOWN_SAFE_DOMAINS = new Set([
@@ -160,54 +164,42 @@ Output exactly 5 products in JSON format, ordered by match_score descending.`;
 export async function runSearchOrchestrator(
 	anthropicApiKey: string,
 	braveApiKey: string,
-	context: SearchContext
+	context: SearchContext,
+	options: {
+		searchProvider?: SearchProvider;
+		tavilyApiKey?: string;
+	} = {}
 ): Promise<OrchestratorResult> {
 	const anthropic = new Anthropic({ apiKey: anthropicApiKey });
+	const searchProvider = options.searchProvider || 'brave';
 
-	// Build comprehensive search queries
-	const queries = buildSearchQueries(context.query, {
-		favorite_retailers: context.profile.favorite_retailers,
-		excluded_retailers: context.profile.excluded_retailers,
-		budget_max: context.profile.budget_max
-	});
-
-	// Execute searches in parallel (larger batches of 5 for speed)
+	// Execute searches based on provider
 	const allResults: string[] = [];
 	const imageResults: BraveImageResult[] = [];
 
-	// Run web searches in batches
-	for (let i = 0; i < queries.length; i += 5) {
-		const batch = queries.slice(i, i + 5);
-		const results = await Promise.all(
-			batch.map(async (q) => {
-				try {
-					// Increase results per query to 12 for more comprehensive coverage
-					const searchResults = await braveSearch(braveApiKey, q, 12);
-					return searchResults
-						.map((r) => {
-							let entry = `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`;
-							if (r.thumbnail) {
-								entry += `\nThumbnail: ${r.thumbnail}`;
-							}
-							return entry;
-						})
-						.join('\n\n');
-				} catch (err) {
-					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-					console.error(`Search batch failed: ${errorMessage.slice(0, 100)}`);
-					return '';
-				}
-			})
-		);
-		allResults.push(...results.filter(Boolean));
-	}
+	console.log(`[Orchestrator] Using search provider: ${searchProvider}`);
 
-	// Also run an image search for product images (in parallel with processing)
-	try {
-		const images = await braveImageSearch(braveApiKey, `${context.query} product`, 10);
-		imageResults.push(...images);
-	} catch {
-		// Image search is optional, continue without it
+	if (searchProvider === 'tavily' && options.tavilyApiKey) {
+		// Use Tavily for search
+		const tavilyResults = await runTavilySearch(
+			options.tavilyApiKey,
+			context.query,
+			context.profile
+		);
+		allResults.push(...tavilyResults);
+
+		// Still use Brave for image search (Tavily doesn't have image search)
+		try {
+			const images = await braveImageSearch(braveApiKey, `${context.query} product`, 10);
+			imageResults.push(...images);
+		} catch {
+			// Image search is optional
+		}
+	} else {
+		// Use Brave for search (default)
+		const braveResults = await runBraveSearch(braveApiKey, context);
+		allResults.push(...braveResults.textResults);
+		imageResults.push(...braveResults.imageResults);
 	}
 
 	// Build context for Claude
@@ -313,6 +305,86 @@ Select the 5 BEST products. Add match_score (0-100) and match_reason (1-2 senten
 		curated: curatedProducts,
 		usage: totalUsage
 	};
+}
+
+/**
+ * Run Brave Search with comprehensive queries
+ */
+async function runBraveSearch(
+	braveApiKey: string,
+	context: SearchContext
+): Promise<{ textResults: string[]; imageResults: BraveImageResult[] }> {
+	const textResults: string[] = [];
+	const imageResults: BraveImageResult[] = [];
+
+	// Build comprehensive search queries
+	const queries = buildSearchQueries(context.query, {
+		favorite_retailers: context.profile.favorite_retailers,
+		excluded_retailers: context.profile.excluded_retailers,
+		budget_max: context.profile.budget_max
+	});
+
+	// Run web searches in batches
+	for (let i = 0; i < queries.length; i += 5) {
+		const batch = queries.slice(i, i + 5);
+		const results = await Promise.all(
+			batch.map(async (q) => {
+				try {
+					const searchResults = await braveSearch(braveApiKey, q, 12);
+					return searchResults
+						.map((r) => {
+							let entry = `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`;
+							if (r.thumbnail) {
+								entry += `\nThumbnail: ${r.thumbnail}`;
+							}
+							return entry;
+						})
+						.join('\n\n');
+				} catch (err) {
+					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+					console.error(`Brave search batch failed: ${errorMessage.slice(0, 100)}`);
+					return '';
+				}
+			})
+		);
+		textResults.push(...results.filter(Boolean));
+	}
+
+	// Run image search
+	try {
+		const images = await braveImageSearch(braveApiKey, `${context.query} product`, 10);
+		imageResults.push(...images);
+	} catch {
+		// Image search is optional
+	}
+
+	return { textResults, imageResults };
+}
+
+/**
+ * Run Tavily Search with product-focused queries
+ */
+async function runTavilySearch(
+	tavilyApiKey: string,
+	query: string,
+	profile: SearchContext['profile']
+): Promise<string[]> {
+	try {
+		const results = await tavilyProductSearch(tavilyApiKey, query, {
+			favoriteRetailers: profile.favorite_retailers,
+			excludedRetailers: profile.excluded_retailers,
+			budget_max: profile.budget_max
+		});
+
+		// Format Tavily results similar to Brave results for the orchestrator
+		return results.map((r: TavilySearchResult) => {
+			return `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}\nRelevance: ${r.score}`;
+		}).map(entry => entry);
+	} catch (err) {
+		const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+		console.error(`Tavily search failed: ${errorMessage.slice(0, 100)}`);
+		return [];
+	}
 }
 
 // Find a matching image from image search results based on product name

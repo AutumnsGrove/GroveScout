@@ -81,7 +81,8 @@
 - [ ] Migrate to Cloudflare Durable Objects (keep Queues as fallback)
 - [ ] Proper filters on search page
 - [ ] Reference project on GroveEngine readme
-- [ ] D1 → R2 auto-migration (after 7 days, markdown files)
+- [x] D1 → R2 auto-migration (after 7 days, markdown files) → **DONE**: Migration scheduler + R2 storage implemented
+- [x] Tavily search provider selector → **DONE**: UI toggle between Brave and Tavily
 - [ ] Pass feedback to new search runs for personalization
 
 ---
@@ -90,10 +91,12 @@
 
 ### 1. Install Dependencies
 ```bash
-npm install
+pnpm install
 ```
 
-### 2. Run Database Migration (Feedback + BYOK tables)
+### 2. Run Database Migrations
+
+**Feedback + BYOK tables (0005):**
 ```bash
 # Local
 wrangler d1 execute scout-db --file=./migrations/0005_feedback.sql --local
@@ -102,7 +105,22 @@ wrangler d1 execute scout-db --file=./migrations/0005_feedback.sql --local
 wrangler d1 execute scout-db --file=./migrations/0005_feedback.sql
 ```
 
-### 3. Add New API Keys (when ready)
+**R2 Migration support (0006):**
+```bash
+# Local
+wrangler d1 execute scout-db --file=./migrations/0006_r2_migration.sql --local
+
+# Production
+wrangler d1 execute scout-db --file=./migrations/0006_r2_migration.sql
+```
+
+### 3. Create R2 Bucket
+```bash
+# Create the R2 bucket for long-term result storage
+wrangler r2 bucket create scout-results
+```
+
+### 4. Add New API Keys (when ready)
 
 **DeepSeek API Key:**
 ```bash
@@ -116,7 +134,7 @@ wrangler secret put TAVILY_API_KEY
 # Enter your key when prompted
 ```
 
-### 4. Enable BYOK in Config
+### 5. Enable BYOK in Config
 After adding user keys to the database, update `src/lib/server/agents/config.ts`:
 ```ts
 providers: {
@@ -125,9 +143,9 @@ providers: {
 }
 ```
 
-### 5. Deploy
+### 6. Deploy
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 ---
