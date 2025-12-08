@@ -5,6 +5,7 @@ import { storeResultsInR2, generateR2Key } from './r2';
 import { AGENT_CONFIG } from './agents/config';
 
 // Configuration - uses AGENT_CONFIG for consistency
+// Note: BATCH_SIZE should stay ≤ 100 to avoid memory issues with D1 result sets
 const MIGRATION_AGE_DAYS = AGENT_CONFIG.migration?.migrationAgeDays || 7;
 const BATCH_SIZE = AGENT_CONFIG.migration?.migrationBatchSize || 50;
 const PARALLEL_BATCH_SIZE = AGENT_CONFIG.migration?.parallelMigrations || 5;
@@ -19,6 +20,11 @@ export interface MigrationStats {
 /**
  * Migrate old search results from D1 to R2
  * Called by scheduled cron trigger (daily at 3am UTC)
+ *
+ * Race Condition Handling:
+ * - Uses WHERE r2_key IS NULL + checking meta.changes to prevent duplicate D1 updates
+ * - Idempotency check (R2 head request) detects orphaned R2 objects from crashed migrations
+ * - Any duplicate R2 objects from concurrent runs are cleaned up by cleanupOrphanedR2Objects()
  */
 export async function migrateOldResults(
 	db: D1Database,
@@ -254,6 +260,8 @@ export async function cleanupExpiredResults(
 		});
 
 		// Batch delete from D1 using IN clause for successful R2 deletes
+		// SAFETY: Placeholders are always '?' literals, values are bound via .bind()
+		// Do NOT modify to interpolate actual values into the SQL string
 		if (successfulDeletes.length > 0) {
 			const placeholders = successfulDeletes.map(() => '?').join(', ');
 			await db
@@ -266,7 +274,8 @@ export async function cleanupExpiredResults(
 		console.log(`[Cleanup] Deleted ${deleted} expired results`);
 		return { deleted };
 	} catch (err) {
-		console.error('[Cleanup] Cleanup failed:', err);
+		const errorMessage = err instanceof Error ? err.message : String(err);
+		console.error(`[Cleanup] Cleanup failed during expired result removal: ${errorMessage}`);
 		return { deleted };
 	}
 }
@@ -406,11 +415,13 @@ export async function cleanupOrphanedR2Objects(
 				orphanedKeys.map((key) => r2.delete(key))
 			);
 
-			for (const result of deleteResults) {
+			for (let i = 0; i < deleteResults.length; i++) {
+				const result = deleteResults[i];
 				if (result.status === 'fulfilled') {
 					stats.deleted++;
 				} else {
-					console.error(`[Cleanup] Failed to delete orphaned R2 object:`, result.reason);
+					const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+					console.error(`[Cleanup] Failed to delete orphaned R2 object ${orphanedKeys[i]}: ${errorMessage}`);
 				}
 			}
 		}
@@ -421,7 +432,8 @@ export async function cleanupOrphanedR2Objects(
 
 		return stats;
 	} catch (err) {
-		console.error('[Cleanup] Orphan cleanup failed:', err);
+		const errorMessage = err instanceof Error ? err.message : String(err);
+		console.error(`[Cleanup] Orphan cleanup failed at scan position ${stats.scanned}: ${errorMessage}`);
 		throw err;
 	}
 }

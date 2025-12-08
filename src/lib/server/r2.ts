@@ -1,7 +1,32 @@
 // Scout - R2 Storage Utilities
 // Handles storage and retrieval of search results in R2 as markdown files
 
+import { z } from 'zod';
 import type { CuratedResults, ProductResult } from '$lib/types';
+
+// Zod schemas for runtime validation of stored data
+const ProductResultSchema = z.object({
+	rank: z.number().optional(),
+	name: z.string(),
+	price_current: z.number(),
+	price_original: z.number().optional(),
+	discount_percent: z.number().optional(),
+	retailer: z.string(),
+	url: z.string(),
+	image_url: z.string().optional(),
+	description: z.string().optional(),
+	match_score: z.number().min(0).max(100),
+	match_reason: z.string()
+});
+
+const CuratedResultsSchema = z.object({
+	items: z.array(ProductResultSchema),
+	search_summary: z.string(),
+	generated_at: z.string()
+});
+
+// Raw results are more permissive (can be any product format)
+const RawResultsSchema = z.array(z.unknown());
 
 /**
  * R2 key format: results/{year}/{month}/{search_id}.md
@@ -211,11 +236,28 @@ export async function storeResultsInR2(
 	const now = new Date().toISOString();
 	const r2Key = generateR2Key(searchId, createdAt);
 
+	// Parse and validate the JSON data
+	const rawParsed = JSON.parse(resultsRaw);
+	const curatedParsed = JSON.parse(resultsCurated);
+
+	// Validate with Zod schemas
+	const rawValidation = RawResultsSchema.safeParse(rawParsed);
+	if (!rawValidation.success) {
+		console.warn(`[R2] Raw results validation failed for ${searchId}:`, rawValidation.error.format());
+		// Continue with the data as-is (raw results are permissive)
+	}
+
+	const curatedValidation = CuratedResultsSchema.safeParse(curatedParsed);
+	if (!curatedValidation.success) {
+		console.error(`[R2] Curated results validation failed for ${searchId}:`, curatedValidation.error.format());
+		throw new Error(`Invalid curated results format: ${curatedValidation.error.message}`);
+	}
+
 	const storedData: StoredResult = {
 		searchId,
 		query,
-		resultsRaw: JSON.parse(resultsRaw),
-		resultsCurated: JSON.parse(resultsCurated),
+		resultsRaw: rawParsed,
+		resultsCurated: curatedValidation.data,
 		shareToken,
 		cacheKey,
 		createdAt,
