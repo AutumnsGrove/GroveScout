@@ -275,10 +275,19 @@ function buildProfileContext(profile: {
 
 /**
  * Validate that an image URL is accessible and appropriate
+ * Uses timeout to prevent hanging on slow servers
  */
 export async function validateImageUrl(imageUrl: string): Promise<boolean> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
 	try {
-		const response = await fetch(imageUrl, { method: 'HEAD' });
+		const response = await fetch(imageUrl, {
+			method: 'HEAD',
+			signal: controller.signal
+		});
+		clearTimeout(timeout);
+
 		if (!response.ok) return false;
 
 		const contentType = response.headers.get('content-type');
@@ -290,6 +299,7 @@ export async function validateImageUrl(imageUrl: string): Promise<boolean> {
 
 		return true;
 	} catch {
+		clearTimeout(timeout);
 		return false;
 	}
 }

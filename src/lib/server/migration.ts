@@ -87,17 +87,26 @@ export async function migrateOldResults(
 
 				// Update D1 record - set r2_key and clear raw data to save space
 				// Keep results_curated for quick access (it's small)
+				// Use WHERE r2_key IS NULL to prevent race conditions if cron runs twice
 				const now = new Date().toISOString();
-				await db
+				const updateResult = await db
 					.prepare(
 						`UPDATE search_results
 						 SET r2_key = ?,
 						     migrated_at = ?,
 						     results_raw = NULL
-						 WHERE id = ?`
+						 WHERE id = ? AND r2_key IS NULL`
 					)
 					.bind(r2Key, now, result.id)
 					.run();
+
+				// Check if the update actually happened (rows affected)
+				if (updateResult.meta?.changes === 0) {
+					// Already migrated by another process, skip
+					stats.skipped++;
+					console.log(`[Migration] Skipped ${result.search_id} - already migrated`);
+					continue;
+				}
 
 				stats.migrated++;
 				console.log(`[Migration] Migrated ${result.search_id} → ${r2Key}`);
@@ -158,6 +167,7 @@ export async function getMigrationStats(db: D1Database): Promise<{
 /**
  * Clean up expired results from R2
  * Results with expires_at in the past should be deleted
+ * Uses batched operations for better performance
  */
 export async function cleanupExpiredResults(
 	db: D1Database,
@@ -177,18 +187,35 @@ export async function cleanupExpiredResults(
 			)
 			.all<{ id: string; r2_key: string }>();
 
-		for (const result of expired.results ?? []) {
-			try {
-				// Delete from R2
-				await r2.delete(result.r2_key);
+		const results = expired.results ?? [];
+		if (results.length === 0) {
+			return { deleted: 0 };
+		}
 
-				// Delete from D1
-				await db.prepare('DELETE FROM search_results WHERE id = ?').bind(result.id).run();
+		// Batch delete from R2 using Promise.allSettled for resilience
+		const r2Keys = results.map((r) => r.r2_key);
+		const r2DeleteResults = await Promise.allSettled(
+			r2Keys.map((key) => r2.delete(key))
+		);
 
-				deleted++;
-			} catch (err) {
-				console.error(`[Cleanup] Failed to delete ${result.r2_key}:`, err);
+		// Collect successfully deleted R2 keys
+		const successfulDeletes: string[] = [];
+		r2DeleteResults.forEach((result, index) => {
+			if (result.status === 'fulfilled') {
+				successfulDeletes.push(results[index].id);
+			} else {
+				console.error(`[Cleanup] Failed to delete R2 key ${r2Keys[index]}:`, result.reason);
 			}
+		});
+
+		// Batch delete from D1 using IN clause for successful R2 deletes
+		if (successfulDeletes.length > 0) {
+			const placeholders = successfulDeletes.map(() => '?').join(', ');
+			await db
+				.prepare(`DELETE FROM search_results WHERE id IN (${placeholders})`)
+				.bind(...successfulDeletes)
+				.run();
+			deleted = successfulDeletes.length;
 		}
 
 		console.log(`[Cleanup] Deleted ${deleted} expired results`);

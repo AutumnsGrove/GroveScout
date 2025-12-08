@@ -324,30 +324,34 @@ async function runBraveSearch(
 		budget_max: context.profile.budget_max
 	});
 
-	// Run web searches in batches
-	for (let i = 0; i < queries.length; i += 5) {
-		const batch = queries.slice(i, i + 5);
-		const results = await Promise.all(
+	// Run web searches in batches using Promise.allSettled for resilience
+	const batchSize = AGENT_CONFIG.search?.searchBatchSize || 5;
+	for (let i = 0; i < queries.length; i += batchSize) {
+		const batch = queries.slice(i, i + batchSize);
+		const settledResults = await Promise.allSettled(
 			batch.map(async (q) => {
-				try {
-					const searchResults = await braveSearch(braveApiKey, q, 12);
-					return searchResults
-						.map((r) => {
-							let entry = `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`;
-							if (r.thumbnail) {
-								entry += `\nThumbnail: ${r.thumbnail}`;
-							}
-							return entry;
-						})
-						.join('\n\n');
-				} catch (err) {
-					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-					console.error(`Brave search batch failed: ${errorMessage.slice(0, 100)}`);
-					return '';
-				}
+				const searchResults = await braveSearch(braveApiKey, q, 12);
+				return searchResults
+					.map((r) => {
+						let entry = `Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.description}`;
+						if (r.thumbnail) {
+							entry += `\nThumbnail: ${r.thumbnail}`;
+						}
+						return entry;
+					})
+					.join('\n\n');
 			})
 		);
-		textResults.push(...results.filter(Boolean));
+
+		// Extract successful results, log failures
+		for (const result of settledResults) {
+			if (result.status === 'fulfilled' && result.value) {
+				textResults.push(result.value);
+			} else if (result.status === 'rejected') {
+				const errorMessage = result.reason instanceof Error ? result.reason.message : 'Unknown error';
+				console.error(`Brave search batch failed: ${errorMessage.slice(0, 100)}`);
+			}
+		}
 	}
 
 	// Run image search
