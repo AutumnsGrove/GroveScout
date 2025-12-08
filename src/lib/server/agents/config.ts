@@ -4,33 +4,85 @@
 export const AGENT_CONFIG = {
 	// AI Model Configuration
 	model: {
-		// Primary model for search orchestration and curation
-		// Options: 'claude-haiku-4-5-20251001' (fast/cheap) or 'claude-sonnet-4-20250514' (powerful)
+		// Primary model for search orchestration and curation (text/tools)
+		// For cost optimization, use DeepSeek for text processing when available
 		primary: 'claude-haiku-4-5-20251001',
 
-		// Max tokens for orchestrator (product extraction)
-		orchestratorMaxTokens: 4000,
+		// Vision model for image analysis (style matching, product verification)
+		vision: 'claude-haiku-4-5-20251001',
+
+		// DeepSeek for high-volume text processing (when BYOK enabled)
+		deepseek: 'deepseek-chat',
+
+		// Max tokens for orchestrator (product extraction) - increased for comprehensive results
+		orchestratorMaxTokens: 8000,
 
 		// Max tokens for curator (top 5 selection)
-		curatorMaxTokens: 2000,
+		curatorMaxTokens: 3000,
 	},
 
 	// Search Configuration
 	search: {
 		// Number of Brave search queries to run per search
-		maxSearchQueries: 5,
+		maxSearchQueries: 20,
 
 		// Maximum results per Brave search query
-		resultsPerQuery: 10,
+		resultsPerQuery: 12,
 
 		// Number of curated products to return
 		curatedProductCount: 5,
+
+		// Batch size for parallel search requests
+		searchBatchSize: 5,
+
+		// Number of image search results to fetch
+		imageSearchCount: 10,
+
+		// Minimum confidence threshold for products (0-100)
+		// Products below this are filtered out as low-quality matches
+		minConfidenceThreshold: 50,
+	},
+
+	// Image/Vision Configuration
+	vision: {
+		// Timeout for image URL validation (ms) - 10s for slow CDNs
+		validationTimeoutMs: 10000,
+
+		// Maximum image file size (bytes) - 10MB
+		maxImageSizeBytes: 10 * 1024 * 1024,
+
+		// Supported image file extensions for validation
+		supportedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'],
+	},
+
+	// Migration Configuration
+	migration: {
+		// Age threshold for auto-migration to R2 (days)
+		migrationAgeDays: 7,
+
+		// Batch size for migration queries
+		migrationBatchSize: 50,
+
+		// Number of concurrent migration operations
+		parallelMigrations: 5,
+
+		// Maximum R2 objects to scan for orphan cleanup
+		orphanScanLimit: 1000,
 	},
 
 	// Cache Configuration
 	cache: {
 		// How long to cache search results (in seconds)
 		searchResultsTTL: 24 * 60 * 60, // 24 hours
+	},
+
+	// Provider Configuration
+	providers: {
+		// Enable DeepSeek as primary text model when API key available
+		useDeepSeekForText: false, // Will be enabled via BYOK
+
+		// Enable Tavily as additional search source
+		useTavily: false, // Will be enabled via BYOK
 	}
 } as const;
 
@@ -38,6 +90,8 @@ export const AGENT_CONFIG = {
 export const MODEL_NAMES: Record<string, string> = {
 	'claude-haiku-4-5-20251001': 'Claude Haiku 4.5',
 	'claude-sonnet-4-20250514': 'Claude Sonnet 4',
+	'deepseek-chat': 'DeepSeek V3',
+	'deepseek-reasoner': 'DeepSeek R1',
 };
 
 // Get human-readable model name

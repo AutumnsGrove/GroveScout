@@ -33,7 +33,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		);
 	}
 
-	const { query, structured } = parseResult.data;
+	const { query, structured, searchProvider } = parseResult.data;
 
 	// Check for cached results first
 	const cachedResult = await findCachedSearch(KV, query, structured);
@@ -127,7 +127,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		user_id: locals.user.id,
 		query_freeform: query,
 		query_structured: structured ?? null,
-		profile: profileContext
+		profile: profileContext,
+		searchProvider: searchProvider || 'brave'
 	};
 
 	// Track search created
@@ -156,6 +157,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		KV,
 		ANTHROPIC_API_KEY: platform.env.ANTHROPIC_API_KEY,
 		BRAVE_API_KEY: platform.env.BRAVE_API_KEY,
+		TAVILY_API_KEY: platform.env.TAVILY_API_KEY || '',
 		RESEND_API_KEY: platform.env.RESEND_API_KEY || '',
 		SITE_URL: platform.env.SITE_URL || 'https://scout.grove.place'
 	};

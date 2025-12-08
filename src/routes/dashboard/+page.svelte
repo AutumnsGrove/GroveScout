@@ -2,6 +2,21 @@
 	import { Icons, CreditBalance, SearchCard, EmptyState } from '$lib/components/scout';
 
 	let { data } = $props();
+
+	// Pagination state
+	let displayedSearches = $state(data.searches.slice(0, 5));
+	let hasMore = $derived(displayedSearches.length < data.searches.length);
+	let isLoadingMore = $state(false);
+
+	function loadMore() {
+		isLoadingMore = true;
+		// Simulate loading delay for UX
+		setTimeout(() => {
+			const currentCount = displayedSearches.length;
+			displayedSearches = data.searches.slice(0, currentCount + 5);
+			isLoadingMore = false;
+		}, 300);
+	}
 </script>
 
 <svelte:head>
@@ -96,7 +111,7 @@
 			</EmptyState>
 		{:else}
 			<div class="grid gap-4">
-				{#each data.searches as search}
+				{#each displayedSearches as search}
 					<SearchCard
 						id={search.id}
 						query={search.query_freeform || 'Structured search'}
@@ -106,6 +121,25 @@
 					/>
 				{/each}
 			</div>
+
+			<!-- Load More Button -->
+			{#if hasMore}
+				<div class="mt-6 text-center">
+					<button
+						onclick={loadMore}
+						disabled={isLoadingMore}
+						class="scout-btn-secondary"
+					>
+						{#if isLoadingMore}
+							<Icons name="loader" size="sm" class="animate-spin" />
+							Loading...
+						{:else}
+							<Icons name="arrow-right" size="sm" class="rotate-90" />
+							Load More ({data.searches.length - displayedSearches.length} remaining)
+						{/if}
+					</button>
+				</div>
+			{/if}
 		{/if}
 	</section>
 </div>

@@ -13,14 +13,15 @@ export interface WorkerEnv {
 	KV: KVNamespace;
 	ANTHROPIC_API_KEY: string;
 	BRAVE_API_KEY: string;
+	TAVILY_API_KEY?: string;
 	RESEND_API_KEY: string;
 	SITE_URL: string;
 }
 
 export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<void> {
-	const { search_id, query_freeform, query_structured, profile } = job;
+	const { search_id, query_freeform, query_structured, profile, searchProvider } = job;
 
-	console.log(`[Scout] Processing search ${search_id}: "${query_freeform}"`);
+	console.log(`[Scout] Processing search ${search_id}: "${query_freeform}" (provider: ${searchProvider || 'brave'})`);
 
 	try {
 		// Update status to running
@@ -41,11 +42,15 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 			}
 		};
 
-		// Run the search agents
+		// Run the search agents with selected provider
 		const { raw, curated, usage } = await runSearchOrchestrator(
 			env.ANTHROPIC_API_KEY,
 			env.BRAVE_API_KEY,
-			searchContext
+			searchContext,
+			{
+				searchProvider: searchProvider || 'brave',
+				tavilyApiKey: env.TAVILY_API_KEY
+			}
 		);
 
 		if (curated.length === 0) {

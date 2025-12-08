@@ -12,6 +12,9 @@
 		matchScore?: number;
 		matchReason?: string;
 		index?: number;
+		searchId?: string;
+		productId?: string;
+		onFeedback?: (type: 'up' | 'down') => void;
 	}
 
 	let {
@@ -23,8 +26,15 @@
 		imageUrl,
 		matchScore = 0,
 		matchReason,
-		index = 0
+		index = 0,
+		searchId,
+		productId,
+		onFeedback
 	}: Props = $props();
+
+	// Feedback state
+	let feedbackGiven = $state<'up' | 'down' | null>(null);
+	let isSubmittingFeedback = $state(false);
 
 	const discount = $derived(
 		originalPrice && originalPrice > price
@@ -41,6 +51,40 @@
 
 	// Stagger animation delay based on index
 	const animationDelay = $derived(`${index * 100}ms`);
+
+	async function submitFeedback(type: 'up' | 'down') {
+		if (feedbackGiven || isSubmittingFeedback) return;
+
+		isSubmittingFeedback = true;
+
+		try {
+			// If we have searchId and productId, submit to API
+			if (searchId && productId) {
+				const response = await fetch('/api/feedback', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						search_id: searchId,
+						product_id: productId,
+						feedback_type: type,
+						product_name: name,
+						product_url: url
+					})
+				});
+
+				if (!response.ok) {
+					console.error('Failed to submit feedback');
+				}
+			}
+
+			feedbackGiven = type;
+			onFeedback?.(type);
+		} catch (err) {
+			console.error('Feedback submission error:', err);
+		} finally {
+			isSubmittingFeedback = false;
+		}
+	}
 </script>
 
 <article
@@ -110,6 +154,32 @@
 				View Deal
 				<Icons name="external" size="sm" />
 			</a>
+		</div>
+
+		<!-- Feedback Buttons -->
+		<div class="flex items-center justify-center gap-2 mt-3 pt-3 border-t border-cream-200 dark:border-bark-600">
+			<span class="text-xs text-bark-400 dark:text-cream-500">Was this helpful?</span>
+			<div class="flex gap-1">
+				<button
+					onclick={() => submitFeedback('up')}
+					disabled={feedbackGiven !== null || isSubmittingFeedback}
+					class="p-1.5 rounded-full transition-all {feedbackGiven === 'up' ? 'bg-grove-100 dark:bg-grove-900/30 text-grove-600 dark:text-grove-400' : 'hover:bg-grove-50 dark:hover:bg-grove-900/20 text-bark-400 dark:text-cream-500 hover:text-grove-600 dark:hover:text-grove-400'} disabled:opacity-50"
+					title="Good match"
+				>
+					<Icons name="heart" size="sm" />
+				</button>
+				<button
+					onclick={() => submitFeedback('down')}
+					disabled={feedbackGiven !== null || isSubmittingFeedback}
+					class="p-1.5 rounded-full transition-all {feedbackGiven === 'down' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'hover:bg-red-50 dark:hover:bg-red-900/20 text-bark-400 dark:text-cream-500 hover:text-red-600 dark:hover:text-red-400'} disabled:opacity-50"
+					title="Not a good match"
+				>
+					<Icons name="x" size="sm" />
+				</button>
+			</div>
+			{#if feedbackGiven}
+				<span class="text-xs text-grove-600 dark:text-grove-400">Thanks!</span>
+			{/if}
 		</div>
 	</div>
 </article>

@@ -17,10 +17,13 @@ declare global {
 			env: {
 				DB: D1Database;
 				KV: KVNamespace;
+				R2: R2Bucket;
 				SEARCH_QUEUE: Queue<import('$lib/types').SearchJob>;
 				SEARCH_JOB: DurableObjectNamespace<import('$lib/server/agents/durable-object/search-job-do').SearchJobDO>;
 				ANTHROPIC_API_KEY: string;
 				BRAVE_API_KEY: string;
+				DEEPSEEK_API_KEY?: string;
+				TAVILY_API_KEY?: string;
 				STRIPE_SECRET_KEY: string;
 				STRIPE_WEBHOOK_SECRET: string;
 				RESEND_API_KEY: string;

@@ -323,18 +323,41 @@ export async function createSearchResult(
 
 export async function getSearchResultBySearchId(
 	db: D1Database,
-	searchId: string
+	searchId: string,
+	r2?: R2Bucket
 ): Promise<SearchResult | null> {
 	const result = await db
 		.prepare('SELECT * FROM search_results WHERE search_id = ?')
 		.bind(searchId)
-		.first<SearchResult>();
-	return result ?? null;
+		.first<SearchResult & { r2_key?: string }>();
+
+	if (!result) return null;
+
+	// If results were migrated to R2, fetch from there
+	if (result.r2_key && r2) {
+		try {
+			const { getResultsFromR2 } = await import('./r2');
+			const r2Result = await getResultsFromR2(r2, result.r2_key);
+			if (r2Result) {
+				return {
+					...result,
+					results_raw: JSON.stringify(r2Result.resultsRaw),
+					results_curated: JSON.stringify(r2Result.resultsCurated)
+				};
+			}
+		} catch (err) {
+			console.error('[DB] Failed to fetch from R2:', err);
+			// Fall back to D1 data (might be missing results_raw)
+		}
+	}
+
+	return result;
 }
 
 export async function getSearchResultByShareToken(
 	db: D1Database,
-	token: string
+	token: string,
+	r2?: R2Bucket
 ): Promise<(SearchResult & { query_freeform: string | null }) | null> {
 	const result = await db
 		.prepare(
@@ -345,8 +368,28 @@ export async function getSearchResultByShareToken(
        AND (sr.expires_at IS NULL OR sr.expires_at > datetime('now'))`
 		)
 		.bind(token)
-		.first<SearchResult & { query_freeform: string | null }>();
-	return result ?? null;
+		.first<SearchResult & { query_freeform: string | null; r2_key?: string }>();
+
+	if (!result) return null;
+
+	// If results were migrated to R2, fetch from there
+	if (result.r2_key && r2) {
+		try {
+			const { getResultsFromR2 } = await import('./r2');
+			const r2Result = await getResultsFromR2(r2, result.r2_key);
+			if (r2Result) {
+				return {
+					...result,
+					results_raw: JSON.stringify(r2Result.resultsRaw),
+					results_curated: JSON.stringify(r2Result.resultsCurated)
+				};
+			}
+		} catch (err) {
+			console.error('[DB] Failed to fetch from R2:', err);
+		}
+	}
+
+	return result;
 }
 
 function generateShareToken(): string {
