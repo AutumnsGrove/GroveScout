@@ -78,7 +78,10 @@
 
 ### Still TODO
 - [ ] Live streaming results as search runs
-- [ ] Migrate to Cloudflare Durable Objects (keep Queues as fallback)
+- [ ] Enable Cloudflare Durable Objects for advanced search
+    - SvelteKit's adapter-cloudflare doesn't support exporting DO classes from the generated worker
+    - Options: (1) Separate worker for DOs, (2) wrangler multi-worker config, (3) custom entry point
+    - See `wrangler.toml` - DO config is commented out until resolved
 - [ ] Proper filters on search page
 - [ ] Reference project on GroveEngine readme
 - [x] D1 → R2 auto-migration (after 7 days, markdown files) → **DONE**: Migration scheduler + R2 storage implemented

@@ -28,14 +28,18 @@ bucket_name = "scout-results"
 # Run: npx wrangler r2 bucket create scout-results
 
 # Durable Object for advanced search job orchestration
-[[durable_objects.bindings]]
-name = "SEARCH_JOB"
-class_name = "SearchJobDO"
+# NOTE: Temporarily disabled - SvelteKit adapter-cloudflare doesn't support
+# exporting Durable Objects from the generated worker entry point.
+# TODO: Set up a separate worker for Durable Objects or use wrangler's
+# multi-worker configuration when advanced search is needed.
+# [[durable_objects.bindings]]
+# name = "SEARCH_JOB"
+# class_name = "SearchJobDO"
 
 # SQLite migrations for Durable Objects
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["SearchJobDO"]
+# [[migrations]]
+# tag = "v1"
+# new_sqlite_classes = ["SearchJobDO"]
 
 # Queue for async search jobs (producer only - consumer needs separate worker)
 # Note: Consumer disabled until we create a dedicated queue worker
@@ -85,15 +89,16 @@ id = "31eb5622c7fd41ec8fc8c8f939f5099b"
 binding = "R2"
 bucket_name = "scout-results"
 
-# Durable Object (production) - must be explicitly defined per environment
-[[env.production.durable_objects.bindings]]
-name = "SEARCH_JOB"
-class_name = "SearchJobDO"
+# Durable Object (production) - temporarily disabled
+# See note above about SvelteKit adapter-cloudflare limitations
+# [[env.production.durable_objects.bindings]]
+# name = "SEARCH_JOB"
+# class_name = "SearchJobDO"
 
 # SQLite migrations for Durable Objects (production)
-[[env.production.migrations]]
-tag = "v1"
-new_sqlite_classes = ["SearchJobDO"]
+# [[env.production.migrations]]
+# tag = "v1"
+# new_sqlite_classes = ["SearchJobDO"]
 
 [env.production.vars]
 ENVIRONMENT = "production"
