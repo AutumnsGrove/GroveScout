@@ -85,6 +85,16 @@ id = "31eb5622c7fd41ec8fc8c8f939f5099b"
 binding = "R2"
 bucket_name = "scout-results"
 
+# Durable Object (production) - must be explicitly defined per environment
+[[env.production.durable_objects.bindings]]
+name = "SEARCH_JOB"
+class_name = "SearchJobDO"
+
+# SQLite migrations for Durable Objects (production)
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["SearchJobDO"]
+
 [env.production.vars]
 ENVIRONMENT = "production"
 SITE_URL = "https://scout.grove.place"
