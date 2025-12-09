@@ -159,5 +159,24 @@ pnpm run deploy
 3. Beta launch strategy - invite-only vs public? → **invite only, free users get 5 lower-quality searches**
 
 ---
+## Post‑Review Actions (2025‑12‑08)
+
+A comprehensive review of the latest commits has been completed. The following actions are recommended before deployment:
+
+### ✅ Completed
+- Applied all database migrations locally (0001–0006).
+- Verified all 96 tests pass.
+- Created deployment guide (`DEPLOYMENT_GUIDE.md`).
+
+### ⚠️ Required Before Deployment
+1. **Fix Cloudflare configuration warning** by adding `durable_objects` and `migrations` under `[env.production]` in `wrangler.toml`.
+2. **Set missing secrets** (Apple OAuth, DeepSeek, Tavily, etc.) using `wrangler secret put`.
+3. **Apply remote migrations** with `wrangler d1 execute scout-db --remote`.
+4. **Deploy** using `pnpm run deploy`.
+
+### 📋 Detailed Commands
+See `DEPLOYMENT_GUIDE.md` for exact commands and step‑by‑step instructions.
+
+---
 
 *See docs/TODO.md for full V2/V3 roadmap*

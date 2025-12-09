@@ -1,0 +1,163 @@
+# Scout Deployment Guide
+
+This guide outlines the steps required to deploy the latest changes to Cloudflare, including missing secrets, configuration fixes, and migration commands.
+
+## 1. Fix Cloudflare Configuration
+
+Update `wrangler.toml` to include durable objects and migrations under the production environment.
+
+### Current Issue
+The warning: `"durable_objects" exists at the top level, but not on "env.production".`
+
+### Solution
+Add the following sections under `[env.production]` in `wrangler.toml`:
+
+```toml
+[env.production]
+name = "scout"
+
+# Durable Object for advanced search job orchestration
+[[env.production.durable_objects.bindings]]
+name = "SEARCH_JOB"
+class_name = "SearchJobDO"
+
+# SQLite migrations for Durable Objects
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["SearchJobDO"]
+
+# D1 Database (production)
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "scout-db"
+database_id = "6a289378-c662-4c6a-9f1b-fa5296e03fa2"
+
+# KV Namespace (production)
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "31eb5622c7fd41ec8fc8c8f939f5099b"
+
+# R2 Bucket (production)
+[[env.production.r2_buckets]]
+binding = "R2"
+bucket_name = "scout-results"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+SITE_URL = "https://scout.grove.place"
+```
+
+**Note:** The D1, KV, and R2 sections are already present; ensure they are not duplicated. The above is a complete example for reference.
+
+## 2. Set Missing Secrets
+
+The following secrets are referenced in the code but not yet set in Cloudflare. Run these commands to add them (replace `YOUR_VALUE` with actual keys).
+
+### Apple OAuth
+```bash
+npx wrangler secret put APPLE_CLIENT_ID --env production
+npx wrangler secret put APPLE_TEAM_ID --env production
+npx wrangler secret put APPLE_KEY_ID --env production
+npx wrangler secret put APPLE_PRIVATE_KEY --env production
+```
+
+### DeepSeek
+```bash
+npx wrangler secret put DEEPSEEK_API_KEY --env production
+```
+
+### Tavily
+```bash
+npx wrangler secret put TAVILY_API_KEY --env production
+```
+
+### Cloudflare AI (optional)
+```bash
+npx wrangler secret put CLOUDFLARE_ACCOUNT_ID --env production
+npx wrangler secret put CLOUDFLARE_API_TOKEN --env production
+```
+
+### Kimi (optional)
+```bash
+npx wrangler secret put KIMI_API_KEY --env production
+```
+
+**Tip:** You can also set these for the development environment by omitting `--env production`.
+
+## 3. Apply Remote Database Migrations
+
+The local database has been migrated, but the remote D1 database needs the same migrations. Run each migration file in order:
+
+```bash
+for f in migrations/*.sql; do
+  echo "Applying $f..."
+  npx wrangler d1 execute scout-db --file="$f" --remote
+done
+```
+
+Or run them individually:
+
+```bash
+npx wrangler d1 execute scout-db --file=./migrations/0001_init.sql --remote
+npx wrangler d1 execute scout-db --file=./migrations/0002_admin.sql --remote
+npx wrangler d1 execute scout-db --file=./migrations/0003_features.sql --remote
+npx wrangler d1 execute scout-db --file=./migrations/0004_tokens.sql --remote
+npx wrangler d1 execute scout-db --file=./migrations/0005_feedback.sql --remote
+npx wrangler d1 execute scout-db --file=./migrations/0006_r2_migration.sql --remote
+```
+
+## 4. Deploy the Application
+
+Build and deploy using the existing npm script:
+
+```bash
+pnpm run deploy
+```
+
+Or manually:
+
+```bash
+pnpm run build
+npx wrangler pages deploy .svelte-kit/cloudflare
+```
+
+## 5. Verify Deployment
+
+After deployment, check the following:
+
+- **Cron trigger**: The migration cron is scheduled daily at 3am UTC. You can manually trigger it by calling `POST /api/cron/migrate` with the `cf-cron` header or an internal key.
+- **Durable Object**: Ensure the `SearchJobDO` class is accessible (if used).
+- **New features**: Test feedback submission, Tavily search (if enabled), and R2 migration.
+
+## 6. Post‑Deployment Testing
+
+Run the test suite against the production environment (if possible) or at least verify critical endpoints:
+
+```bash
+pnpm test
+```
+
+All 96 tests should pass.
+
+## Summary of Changes Deployed
+
+- D1 → R2 auto‑migration (results older than 7 days move to R2, raw data cleared from D1)
+- User feedback tables (`user_feedback`, `user_api_keys`)
+- Tavily search provider integration
+- DeepSeek, Kimi, Cloudflare AI provider abstractions
+- Durable Object for advanced search job orchestration
+- Cron trigger for daily migration
+- Enhanced security and validation in vision/SSRF protection
+
+## Troubleshooting
+
+- **Migration fails**: Check that the R2 bucket `scout-results` exists and the binding is correct.
+- **Missing secrets**: Ensure all secrets are set; otherwise, features may fail silently.
+- **Durable Object warnings**: If you see warnings about `durable_objects` after updating `wrangler.toml`, restart the deployment.
+
+## Need Help?
+
+Refer to the project documentation in `docs/` or check `TODOS.md` for ongoing tasks.
+
+---
+*Generated by Kilo Code on 2025‑12‑08*
