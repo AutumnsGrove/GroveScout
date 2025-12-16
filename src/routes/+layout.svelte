@@ -259,10 +259,10 @@
 
 			<div class="border-t border-cream-300 dark:border-bark-600 mt-8 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
 				<p class="text-sm text-bark-400 dark:text-cream-500">
-					&copy; 2025 Scout by Grove. All rights reserved.
+					&copy; 2025 Scout. All rights reserved.
 				</p>
 				<p class="text-sm text-bark-400 dark:text-cream-500">
-					Built with care for overwhelmed shoppers.
+					Powered by <a href="https://grove.place" class="text-grove-600 dark:text-grove-400 hover:underline">Lattice from The Grove</a>
 				</p>
 			</div>
 		</div>

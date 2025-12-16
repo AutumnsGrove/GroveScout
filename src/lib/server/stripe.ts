@@ -1,16 +1,16 @@
 // Scout - Stripe Integration
 import Stripe from 'stripe';
 
-// Plan configuration
+// Plan configuration (Grove tier names: Seedling, Sapling, Evergreen, Canopy, Platform)
 export const PLANS = {
-	basic: {
-		name: 'Basic',
+	seedling: {
+		name: 'Seedling',
 		price: 1000, // $10.00
 		credits: 50,
 		priceId: '' // Set via environment or Stripe dashboard
 	},
-	pro: {
-		name: 'Pro',
+	sapling: {
+		name: 'Sapling',
 		price: 2500, // $25.00
 		credits: 200,
 		priceId: ''

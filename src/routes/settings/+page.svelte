@@ -132,7 +132,7 @@
 		{#if data.subscription}
 			<div class="subscription-card">
 				<div class="plan-info">
-					<span class="plan-name">{data.subscription.plan === 'pro' ? 'Pro' : 'Basic'} Plan</span>
+					<span class="plan-name">{data.subscription.plan === 'sapling' ? 'Sapling' : 'Seedling'} Plan</span>
 					<span class="status status-{data.subscription.status}">{data.subscription.status}</span>
 				</div>
 				<p class="renewal">
