@@ -43,8 +43,8 @@
 	}
 
 	const PRICE_IDS = {
-		basic: 'price_basic_monthly',
-		pro: 'price_pro_monthly',
+		seedling: 'price_seedling_monthly',
+		sapling: 'price_sapling_monthly',
 		credits: 'price_credit_pack'
 	};
 
@@ -90,9 +90,9 @@
 
 	<!-- Plans Grid -->
 	<div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
-		<!-- Basic Plan -->
+		<!-- Seedling Plan -->
 		<PlanCard
-			name="Basic"
+			name="Seedling"
 			price={10}
 			searches={50}
 			features={[
@@ -102,13 +102,13 @@
 				'Profile preferences',
 				'Email notifications'
 			]}
-			priceId={PRICE_IDS.basic}
+			priceId={PRICE_IDS.seedling}
 			onselect={(id) => data.user ? handleCheckout(id, 'subscription') : window.location.href = `/auth/login?redirect=/pricing`}
 		/>
 
-		<!-- Pro Plan -->
+		<!-- Sapling Plan -->
 		<PlanCard
-			name="Pro"
+			name="Sapling"
 			price={25}
 			searches={200}
 			features={[
@@ -120,7 +120,7 @@
 				'Priority processing'
 			]}
 			popular
-			priceId={PRICE_IDS.pro}
+			priceId={PRICE_IDS.sapling}
 			onselect={(id) => data.user ? handleCheckout(id, 'subscription') : window.location.href = `/auth/login?redirect=/pricing`}
 		/>
 

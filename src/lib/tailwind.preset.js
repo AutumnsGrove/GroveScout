@@ -84,7 +84,9 @@ export default {
       // ─────────────────────────────────────────────────────────────
       fontFamily: {
         serif: ['Georgia', 'Cambria', '"Times New Roman"', 'Times', 'serif'],
+        // Lexend is the default font across all Grove properties (as of v0.6.x)
         sans: [
+          'Lexend',
           'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
