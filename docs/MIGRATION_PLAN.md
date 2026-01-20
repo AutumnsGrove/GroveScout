@@ -81,7 +81,14 @@ The current layout contains ~270 lines of custom implementation:
 
 ### Phase 0: Pre-Migration Audit
 
-> **✅ Version Verified:** groveengine@0.9.80 existence confirmed by package maintainer (2026-01-20). APIs verified against source at `/Projects/GroveEngine/packages/engine/src/lib/ui/`.
+> **✅ Version Verified:** groveengine@0.9.80 published and available on npm.
+>
+> ```bash
+> $ npm view @autumnsgrove/groveengine versions --json | tail -5
+> "0.9.6", "0.9.7", "0.9.71", "0.9.80"  # ← Target version exists ✅
+> ```
+>
+> APIs verified against source at `/Projects/GroveEngine/packages/engine/src/lib/ui/`.
 
 Before beginning implementation, verify that all required exports and APIs are available in groveengine 0.9.80.
 
@@ -144,35 +151,40 @@ grep -r "scout-" src/ --include="*.svelte" --include="*.css" | sort -u
 # Compare with grove.css coverage
 ```
 
-#### 0.5 ⚠️ CRITICAL: Test Seasonal Query Injection
+#### 0.5 Seasonal Search Architecture
 
-**This must be tested before implementation.** The planned query enrichment:
-```typescript
-`${query} (seasonal preference: warm, cozy, layered)`
+> **✅ Clarification:** The season parameter does NOT go directly to the Brave Search API.
+
+**How seasonal search actually works:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  CLIENT                                                                  │
+│  User selects "Autumn" season, types "cozy sweater"                     │
+│  → Sends: { query: "cozy sweater", season: "autumn" }                   │
+└─────────────────────────────────┬───────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  SCOUT BACKEND (Enhancement Layer)                                       │
+│                                                                          │
+│  1. Receives simple season word: "autumn"                               │
+│  2. Scout translates → "earth tones, cozy, sweaters, layering, flannel" │
+│  3. Builds enriched search context for the agent swarm                  │
+│  4. Agents use context to guide their searches intelligently            │
+│                                                                          │
+│  The Brave API sees normal queries - Scout handles the semantics.       │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**May not work correctly with your search backend.** Different search APIs handle appended text differently:
-- Some treat parenthetical text as literal search terms
-- Some have token limits that truncate extra keywords
-- Some have structured filter APIs that work better
+**The client's job is simple:** Pass the season as a single word parameter.
 
-**Before proceeding:**
-```bash
-# Test manually with your search backend
-curl "https://api.search.brave.com/res/v1/web/search?q=cozy+sweater+(seasonal+preference:+warm,+cozy)"
-```
+**Scout's backend handles the rest:** The orchestrator and agent swarm know how to interpret seasonal context. This is internal to Scout's search intelligence - not a raw query modification.
 
-**If results are poor, use the backend's filter/facet API instead:**
-```typescript
-// Alternative: Use structured filters instead of query modification
-const searchParams = {
-  query: userQuery,
-  filters: {
-    category: getSeasonalCategories(season),
-    tags: SEASONAL_CONTEXTS[season].keywords
-  }
-};
-```
+**What to test in Phase 0:**
+- [ ] Verify seasonal context produces better results (compare autumn vs. winter for "sweater")
+- [ ] Ensure orchestrator receives and uses the season parameter correctly
+- [ ] Test that agent swarm interprets seasonal hints as expected
 
 #### 0.6 Exit Criteria for Phase 0
 
@@ -226,22 +238,37 @@ export default {
 };
 ```
 
-#### 1.3 Update Font Loading (HTML)
+#### 1.3 Font Loading (GroveEngine Handles This)
 
-Move font loading from CSS `@import` to HTML `<link>` tags for better performance:
+> **✅ No action needed:** GroveEngine includes 10 fonts served from `cdn.grove.place`.
 
-```html
-<!-- src/app.html (in <head>) -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Only include weights actually used: 400 (body), 500 (medium), 600 (semibold), 700 (bold) -->
-<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
+GroveEngine's base styles already include font loading. The engine provides:
+
+| Category | Fonts Included |
+|----------|----------------|
+| **Default** | Lexend (Grove system font) |
+| **Accessibility** | Atkinson Hyperlegible, OpenDyslexic |
+| **Sans-Serif** | Quicksand, Plus Jakarta Sans |
+| **Monospace** | IBM Plex Mono, Cozette |
+| **Display** | Alagard, Calistoga, Caveat |
+
+```typescript
+// GroveEngine font utilities available:
+import { fonts, getFontStack, FONT_CDN_BASE } from '@autumnsgrove/groveengine/ui/tokens';
+
+// All fonts served from: https://cdn.grove.place/fonts/
 ```
 
-> **Why?**
-> - CSS `@import` for fonts blocks rendering. HTML `<link>` with `preconnect` allows the browser to establish connections early, reducing load time.
-> - `display=swap` prevents invisible text during font loading (FOUT over FOIT).
-> - We removed weight 300 (light) since it's not used in the design system. Each weight adds ~15-20KB.
+**What to verify:**
+- [ ] Remove any existing Google Fonts `<link>` tags from `src/app.html`
+- [ ] Remove CSS `@import` for Lexend from `src/app.css`
+- [ ] GroveEngine's styles will handle font-face declarations automatically
+- [ ] Preconnect to Grove CDN if not already included in engine styles:
+
+```html
+<!-- Optional: Add to src/app.html if needed for performance -->
+<link rel="preconnect" href="https://cdn.grove.place" crossorigin>
+```
 
 #### 1.4 Update CSS Imports
 
@@ -513,6 +540,25 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
 
 **Mobile Behavior:** On mobile, the carousel becomes swipeable with smooth momentum scrolling. The glass effect creates a beautiful layered appearance as cards overlap during scroll.
 
+**Accessibility Enhancements:**
+
+The GlassCarousel component already includes:
+- ✅ Keyboard navigation (arrow keys, Home/End)
+- ✅ `role="region"` with `aria-roledescription="carousel"`
+- ✅ `aria-hidden` on non-active slides
+
+**Verify or add if needed:**
+- [ ] `aria-live="polite"` region to announce slide changes
+- [ ] Pause/resume controls if autoplay is enabled
+- [ ] `prefers-reduced-motion` support (disable autoplay, reduce animations)
+
+```svelte
+<!-- Example: Wrap carousel with live region for screen readers -->
+<div aria-live="polite" aria-atomic="true" class="sr-only">
+  Showing product {currentIndex + 1} of {data.curatedItems.length}
+</div>
+```
+
 #### 3.4 Button Migration
 
 | Scout Class | Grove Equivalent |
@@ -766,16 +812,12 @@ export async function handleSearch(request: SearchRequest) {
 }
 ```
 
-> ⚠️ **Testing Note:** The query enrichment approach (appending seasonal keywords) should be tested with your actual search backend before implementation. Some search APIs may:
-> - Treat parenthetical text differently than main query
-> - Have token limits that could truncate seasonal context
-> - Perform better with structured filters vs. query modification
+> 💡 **Architecture Note:** The seasonal context is used by Scout's orchestrator and agent swarm internally. It's not appended directly to external search API queries. The agents use seasonal context as guidance for:
+> - Selecting relevant product categories
+> - Filtering results by appropriateness
+> - Ranking items by seasonal fit
 >
-> **Recommended:** Test these queries manually first:
-> - `"cozy sweater (seasonal preference: warm, cozy, layered)"`
-> - `"summer dress (seasonal preference: breathable, lightweight)"`
->
-> If results are poor, consider using the backend's filter/facet API instead of query modification.
+> This is Scout's search intelligence layer - the external APIs (Brave, retailers) see normal queries.
 
 **Step 3: API endpoint wires it together**
 
@@ -1136,6 +1178,45 @@ describe('SeasonSelector', () => {
 });
 ```
 
+### Test Tooling Recommendations
+
+**Visual Regression Testing:**
+- **Recommended:** [Playwright visual comparisons](https://playwright.dev/docs/test-snapshots) (built-in, free)
+- **Alternative:** Percy, Chromatic (paid, more features)
+
+```bash
+# Playwright visual comparison setup
+npx playwright test --update-snapshots  # Capture baseline
+npx playwright test                      # Compare against baseline
+```
+
+**E2E Testing:**
+- **Recommended:** Playwright (already used for visual regression)
+- Test critical user journeys:
+  1. Search flow: query → season select → results → product click
+  2. Auth flow: login → dashboard → logout
+  3. Theme toggle persistence across page loads
+  4. Mobile menu interactions
+
+```typescript
+// Example: e2e/search-flow.spec.ts
+test('seasonal search produces relevant results', async ({ page }) => {
+  await page.goto('/search/new');
+  await page.fill('[name="query"]', 'cozy sweater');
+  await page.click('[aria-label="Autumn season"]');
+  await page.click('button[type="submit"]');
+
+  // Wait for results
+  await expect(page.locator('.glass-carousel')).toBeVisible();
+  await expect(page.locator('[data-testid="product-card"]')).toHaveCount(5);
+});
+```
+
+**Integration Testing:**
+- Use Vitest for unit and integration tests
+- Mock external APIs (Brave Search, Claude) in tests
+- Test the full season → orchestrator → results flow with mocked responses
+
 #### localStorage Migration Tests
 ```typescript
 // src/lib/utils/migrate-preferences.test.ts
@@ -1179,9 +1260,26 @@ describe('migrateUserPreferences', () => {
 ## Security Audit Checklist
 
 ### Content Security Policy (CSP)
-- [ ] Allow font origins: `fonts.googleapis.com`, `fonts.gstatic.com`
-- [ ] Verify `style-src` allows inline styles (for Glass components)
+- [ ] Allow font origin: `cdn.grove.place` (GroveEngine fonts)
+- [ ] Remove Google Fonts origins if no longer used
 - [ ] Test CSP doesn't block GlassCarousel animations
+
+**⚠️ Inline Styles Investigation:**
+
+The GlassCarousel uses inline `style` attributes for dynamic transforms (position, scale, opacity). This is necessary for smooth animations and is **not a security concern** because:
+
+1. The styles are computed from internal state (index, dragOffset), not user input
+2. No `{@html}` or string interpolation of user data into styles
+3. Svelte's reactive updates handle the style changes safely
+
+**What to verify:**
+- [ ] Glass component styles work without `unsafe-inline` in CSP
+- [ ] If inline styles are blocked, consider using CSS custom properties instead:
+  ```svelte
+  <!-- Alternative: CSS custom properties (if CSP blocks inline styles) -->
+  <div style:--card-offset="{offset}px" class="carousel-card" />
+  ```
+- [ ] Document any required CSP exceptions in deployment docs
 
 ### XSS Prevention
 - [x] `product.matchReason` - Auto-escaped by Svelte ✅ (AI-generated from Claude API)
@@ -1201,6 +1299,39 @@ describe('migrateUserPreferences', () => {
 - [ ] Product images loaded via `img` tags (not background-image with user URLs)
 - [ ] External links (`product.url`) go through redirect warning or are trusted domains
 - [ ] Avoid dynamic code evaluation with user data
+
+### Error Message Handling
+- [ ] Sanitize error details before sending to client (no stack traces, internal paths)
+- [ ] Use generic error messages for unexpected failures
+- [ ] Log detailed errors server-side only
+
+```typescript
+// Good: Sanitized error response
+throw error(500, { message: 'Search failed. Please try again.' });
+
+// Bad: Exposes internal details
+throw error(500, { message: `Failed at ${filePath}: ${err.stack}` });
+```
+
+### External Product URLs
+Product URLs come from search results and point to third-party retailers. Consider:
+
+- [ ] **Option A (Simple):** Trust URLs from search results (Brave filters malicious sites)
+- [ ] **Option B (Safer):** Allowlist of trusted retailer domains
+- [ ] **Option C (Safest):** Redirect warning page before leaving Scout
+
+```svelte
+<!-- Option B: Validate against trusted domains -->
+{#if isTrustedRetailer(product.url)}
+  <a href={product.url} target="_blank" rel="noopener">View Deal</a>
+{:else}
+  <a href="/redirect?url={encodeURIComponent(product.url)}" target="_blank">
+    View Deal (external site)
+  </a>
+{/if}
+```
+
+**Recommendation:** Start with Option A (trust search results), add Option B if abuse is detected.
 
 ---
 
