@@ -1597,5 +1597,124 @@ The graft will provide:
 
 ---
 
+## Implementation Considerations
+
+> **Note:** The following items were identified during PR review and should be addressed during implementation.
+
+### High Priority
+
+#### External URL Validation (Security)
+
+Product URLs from search results should use an allowlist approach rather than trusting all results:
+
+```typescript
+// Recommended: Allowlist approach
+const TRUSTED_DOMAINS = [
+  'amazon.com',
+  'target.com',
+  'nordstrom.com',
+  // ... other vetted retailers
+];
+
+const isUrlAllowed = (url: string): boolean => {
+  try {
+    const hostname = new URL(url).hostname;
+    return TRUSTED_DOMAINS.some(domain =>
+      hostname === domain || hostname.endsWith(`.${domain}`)
+    );
+  } catch {
+    return false;
+  }
+};
+```
+
+This provides proactive protection against phishing URLs appearing in search results.
+
+#### Bundle Size Monitoring (CI)
+
+Add automated bundle size tracking to prevent bloat during migration:
+
+```yaml
+# In CI workflow
+- name: Check bundle size
+  run: |
+    npm run build
+    BUNDLE_SIZE=$(du -sb .svelte-kit/cloudflare | cut -f1)
+    if [ $BUNDLE_SIZE -gt 512000 ]; then
+      echo "Bundle size exceeds 500KB budget"
+      exit 1
+    fi
+```
+
+Consider tools like `bundlewatch` or `size-limit` for more granular tracking.
+
+### Medium Priority
+
+#### GlassCarousel Accessibility
+
+Complete ARIA implementation with live regions for screen reader announcements:
+
+```svelte
+<div
+  role="region"
+  aria-label="Search results carousel"
+  aria-live="polite"
+>
+  <!-- Carousel content -->
+  <div aria-live="assertive" class="sr-only">
+    {#if currentSlide}
+      Showing item {currentIndex + 1} of {totalItems}: {currentSlide.title}
+    {/if}
+  </div>
+</div>
+```
+
+#### Database Schema for Seasonal Tracking
+
+Add D1 schema for analytics on seasonal search patterns:
+
+```sql
+-- Track season parameter usage for analytics
+CREATE TABLE IF NOT EXISTS search_analytics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT,
+  season TEXT NOT NULL,  -- 'spring', 'summer', 'autumn', 'winter'
+  query TEXT NOT NULL,
+  result_count INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_search_season ON search_analytics(season);
+CREATE INDEX idx_search_date ON search_analytics(created_at);
+```
+
+### Low Priority
+
+#### Monitoring & Observability
+
+Define success metrics for the migration:
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| Season distribution | Even across 4 seasons | D1 analytics query |
+| Carousel engagement | >60% swipe/click rate | Event tracking |
+| Theme migration | 0 localStorage fallbacks | Console monitoring |
+| Bundle size | <500KB | CI check |
+
+#### Feature Flags
+
+When implementing gradual rollout, use the engine's feature flag pattern:
+
+```typescript
+import { evaluateFlag } from '@autumnsgrove/groveengine/feature-flags';
+
+const useNewChrome = await evaluateFlag('scout-chrome-v2', {
+  userId: user?.id,
+  percentage: 25, // 25% rollout
+});
+```
+
+---
+
 *Last Updated: 2026-01-20*
 *Author: Claude (Opus 4.5)*
