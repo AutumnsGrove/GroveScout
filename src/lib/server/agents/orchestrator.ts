@@ -210,8 +210,13 @@ export async function runSearchOrchestrator(
 	// Build context for Claude
 	const searchResultsText = allResults.join('\n\n---\n\n');
 	const profileContext = buildProfileContext(context.profile);
+
+	// Season display names for prompt context
+	const SEASON_DISPLAY: Record<string, string> = {
+		spring: 'Spring', summer: 'Summer', autumn: 'Autumn', winter: 'Winter'
+	};
 	const seasonContext = context.season
-		? `**Season:** ${context.season.charAt(0).toUpperCase() + context.season.slice(1)} - Prioritize seasonally-appropriate products for this time of year.\n\n`
+		? `**Season:** ${SEASON_DISPLAY[context.season]} - Prioritize seasonally-appropriate products for this time of year.\n\n`
 		: '';
 
 	// Run orchestrator to extract products

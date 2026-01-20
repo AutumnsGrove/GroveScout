@@ -30,7 +30,7 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 		// Build search context
 		const searchContext = {
 			query: query_freeform || 'general deals',
-			season: season ?? undefined,
+			season: season ?? null,
 			profile: {
 				sizes: profile.sizes,
 				color_favorites: profile.color_preferences?.favorites,
