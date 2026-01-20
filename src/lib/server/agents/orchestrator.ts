@@ -210,6 +210,9 @@ export async function runSearchOrchestrator(
 	// Build context for Claude
 	const searchResultsText = allResults.join('\n\n---\n\n');
 	const profileContext = buildProfileContext(context.profile);
+	const seasonContext = context.season
+		? `**Season:** ${context.season.charAt(0).toUpperCase() + context.season.slice(1)} - Prioritize seasonally-appropriate products for this time of year.\n\n`
+		: '';
 
 	// Run orchestrator to extract products
 	const orchestratorResponse = await anthropic.messages.create({
@@ -222,7 +225,7 @@ export async function runSearchOrchestrator(
 				content: `## Search Request
 **Query:** ${context.query}
 
-${profileContext}
+${seasonContext}${profileContext}
 
 ## Search Results (${allResults.length} sources)
 ${searchResultsText}
@@ -283,7 +286,7 @@ Extract ALL products that match or could match the criteria. Be thorough - extra
 				content: `## Original Request
 **Query:** ${context.query}
 
-${profileContext}
+${seasonContext}${profileContext}
 
 ## Products Found (${rawProducts.length} items)
 ${JSON.stringify(rawProducts, null, 2)}

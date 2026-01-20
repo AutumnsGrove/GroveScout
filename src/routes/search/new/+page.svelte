@@ -3,18 +3,19 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { Icons, SearchInput, CreditBalance } from '$lib/components/scout';
-	// Season constants - define locally since groveengine types not fully exported
-	type RegularSeason = 'spring' | 'summer' | 'autumn' | 'winter';
-	const REGULAR_SEASONS: readonly RegularSeason[] = ['spring', 'summer', 'autumn', 'winter'];
-	const SEASON_LABELS: Record<RegularSeason, string> = {
+	import type { Season } from '$lib/types';
+
+	// Season display constants
+	const SEASONS: readonly Season[] = ['spring', 'summer', 'autumn', 'winter'];
+	const SEASON_LABELS: Record<Season, string> = {
 		spring: 'Spring',
 		summer: 'Summer',
 		autumn: 'Autumn',
 		winter: 'Winter'
 	};
-	const SEASON_ICONS: Record<RegularSeason, string> = {
+	const SEASON_ICONS: Record<Season, string> = {
 		spring: '🌸',
-		summer: '☀️',
+		summer: '🌻',
 		autumn: '🍂',
 		winter: '❄️'
 	};
@@ -26,7 +27,7 @@
 	let error = $state<string | null>(null);
 	let advanced = $state(false);
 	let searchProvider = $state<'brave' | 'tavily'>('brave');
-	let selectedSeason = $state<RegularSeason | null>(null);
+	let selectedSeason = $state<Season | null>(null);
 
 	// Check for pre-filled query from URL
 	onMount(() => {
@@ -171,7 +172,7 @@
 					Season Context <span class="text-bark-400 dark:text-cream-500 font-normal">(optional)</span>
 				</label>
 				<div class="flex flex-wrap gap-2">
-					{#each REGULAR_SEASONS as season}
+					{#each SEASONS as season}
 						<button
 							type="button"
 							onclick={() => selectedSeason = selectedSeason === season ? null : season}

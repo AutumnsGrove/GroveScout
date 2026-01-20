@@ -19,7 +19,7 @@ export interface WorkerEnv {
 }
 
 export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<void> {
-	const { search_id, query_freeform, query_structured, profile, searchProvider } = job;
+	const { search_id, query_freeform, query_structured, profile, searchProvider, season } = job;
 
 	console.log(`[Scout] Processing search ${search_id}: "${query_freeform}" (provider: ${searchProvider || 'brave'})`);
 
@@ -30,6 +30,7 @@ export async function processSearchJob(job: SearchJob, env: WorkerEnv): Promise<
 		// Build search context
 		const searchContext = {
 			query: query_freeform || 'general deals',
+			season: season ?? undefined,
 			profile: {
 				sizes: profile.sizes,
 				color_favorites: profile.color_preferences?.favorites,
