@@ -452,9 +452,9 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
       <GlassCard class="w-full h-full overflow-hidden">
         <!-- Product Image -->
         <div class="aspect-square bg-surface-subtle relative">
-          {#if product.image_url}
+          {#if product.imageUrl}
             <img
-              src={product.image_url}
+              src={product.imageUrl}
               alt={product.name}
               class="w-full h-full object-cover"
               loading="lazy"
@@ -477,14 +477,14 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
 
           <div class="flex items-center justify-between">
             <span class="text-lg font-semibold text-grove-600">
-              ${product.price_current}
+              ${product.priceCurrent}
             </span>
             <span class="text-sm text-muted">{product.retailer}</span>
           </div>
 
           <!-- Match reason (AI-generated, auto-escaped by Svelte) -->
           <p class="text-sm text-muted italic">
-            "{product.match_reason}"
+            "{product.matchReason}"
           </p>
 
           <!-- Actions -->
@@ -531,33 +531,19 @@ Add type definitions for core domain types used throughout the migration:
 
 /** Represents a curated product result from Scout search */
 /**
- * Product type matching actual API response (snake_case from backend)
- * See: src/routes/search/[id]/+page.svelte for current usage
+ * Product type - Grove convention: camelCase everywhere
+ * API responses and frontend use consistent naming
  */
 export interface Product {
   id: string;
-  name: string;              // Product name (not "title")
-  price_current: number;     // Current price (snake_case from API)
-  price_original?: number;   // Original price before discount
+  name: string;
+  priceCurrent: number;
+  priceOriginal?: number;
   retailer: string;
   url: string;
-  image_url?: string;        // Snake_case from API
-  match_score: number;       // AI match confidence (0-100)
-  match_reason: string;      // AI explanation for recommendation
-}
-
-/**
- * Optional: Create a display-friendly version for components
- * This transforms API response to component props
- */
-export function toDisplayProduct(p: Product, index: number) {
-  return {
-    ...p,
-    rank: index + 1,
-    imageUrl: p.image_url,
-    matchReason: p.match_reason,
-    price: p.price_current,
-  };
+  imageUrl?: string;
+  matchScore: number;        // AI match confidence (0-100)
+  matchReason: string;       // AI explanation for recommendation
 }
 
 /** Grove seasonal context for search personalization */
@@ -1198,9 +1184,9 @@ describe('migrateUserPreferences', () => {
 - [ ] Test CSP doesn't block GlassCarousel animations
 
 ### XSS Prevention
-- [x] `product.match_reason` - Auto-escaped by Svelte ✅ (AI-generated from Claude API)
+- [x] `product.matchReason` - Auto-escaped by Svelte ✅ (AI-generated from Claude API)
 - [x] `product.name` and `product.retailer` - Auto-escaped by Svelte ✅
-- [ ] Verify `match_reason` only comes from trusted Claude API responses
+- [ ] Verify `matchReason` only comes from trusted Claude API responses
 - [ ] Use `{@html}` sparingly and only with sanitized content (none currently)
 - [x] All `target="_blank"` links have `rel="noopener"` ✅
 
