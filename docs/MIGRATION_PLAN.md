@@ -79,6 +79,68 @@ The current layout contains ~270 lines of custom implementation:
 
 ## Migration Architecture
 
+### Phase 0: Pre-Migration Audit
+
+Before beginning implementation, verify that all required exports and APIs are available in groveengine 0.9.80.
+
+#### 0.1 Verify GroveEngine Exports
+
+```bash
+# Install target version locally for audit
+npm install @autumnsgrove/groveengine@0.9.80 --save-dev --dry-run
+
+# Or check published exports
+npm view @autumnsgrove/groveengine@0.9.80 exports
+```
+
+#### 0.2 API Verification Checklist
+
+| API | Import Path | Status |
+|-----|-------------|--------|
+| `Header` | `@autumnsgrove/groveengine/ui/chrome` | ⬜ Verify |
+| `Footer` | `@autumnsgrove/groveengine/ui/chrome` | ⬜ Verify |
+| `GlassCarousel` | `@autumnsgrove/groveengine/ui` | ⬜ Verify |
+| `GlassCard` | `@autumnsgrove/groveengine/ui` | ⬜ Verify |
+| `GlassOverlay` | `@autumnsgrove/groveengine/ui` | ⬜ Verify |
+| `themeStore` | `@autumnsgrove/groveengine/ui/stores` | ⬜ Verify |
+| `seasonStore` | `@autumnsgrove/groveengine/ui/stores` | ⬜ Verify |
+| `grovePreset` | `@autumnsgrove/groveengine/ui/tailwind` | ⬜ Verify |
+| Grove styles | `@autumnsgrove/groveengine/ui/styles` | ⬜ Verify |
+
+#### 0.3 GlassCarousel API Check
+
+Verify the carousel accepts these props:
+
+```typescript
+interface GlassCarouselProps {
+  items: unknown[];
+  showDots?: boolean;
+  showArrows?: boolean;
+  autoplay?: boolean;
+  // Verify snippet slot API for custom item rendering
+}
+```
+
+#### 0.4 CSS Overlap Audit
+
+Before removing Scout CSS, verify which classes are fully covered by Grove:
+
+```bash
+# Extract Scout-specific class names
+grep -r "scout-" src/ --include="*.svelte" --include="*.css" | sort -u
+
+# Compare with grove.css coverage
+```
+
+#### 0.5 Exit Criteria for Phase 0
+
+- [ ] All import paths verified against actual package exports
+- [ ] GlassCarousel snippet API confirmed working
+- [ ] No breaking changes between 0.6.1 → 0.9.80 identified
+- [ ] CSS class mapping document created (Scout → Grove)
+
+---
+
 ### Phase 1: Foundation (Dependency & Config Updates)
 
 #### 1.1 Update GroveEngine Dependency
@@ -101,7 +163,8 @@ export default {
   presets: [grovePreset],  // Use engine's preset directly
   content: [
     './src/**/*.{html,js,svelte,ts}',
-    './node_modules/@autumnsgrove/groveengine/**/*.{html,js,svelte,ts}'
+    // Only scan dist/ to avoid slow builds from scanning entire package
+    './node_modules/@autumnsgrove/groveengine/dist/**/*.{html,js,svelte,ts}'
   ],
   // Scout-specific extensions remain
   theme: {
@@ -114,12 +177,24 @@ export default {
 };
 ```
 
-#### 1.3 Update CSS Imports
+#### 1.3 Update Font Loading (HTML)
+
+Move font loading from CSS `@import` to HTML `<link>` tags for better performance:
+
+```html
+<!-- src/app.html (in <head>) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+```
+
+> **Why?** CSS `@import` for fonts blocks rendering. HTML `<link>` with `preconnect` allows the browser to establish connections early, reducing load time.
+
+#### 1.4 Update CSS Imports
 
 ```css
 /* src/app.css */
 @import '@autumnsgrove/groveengine/ui/styles';  /* Grove base styles */
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -327,6 +402,7 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
               src={product.imageUrl}
               alt={product.title}
               class="w-full h-full object-cover"
+              loading="lazy"
             />
           {:else}
             <div class="w-full h-full flex items-center justify-center">
@@ -391,6 +467,59 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
 | `scout-btn-ghost` | `GlassButton variant="ghost"` or `grove-btn-ghost` |
 | `scout-btn-deal` | Keep custom (Scout-specific teal) |
 
+#### 3.5 Type Definitions
+
+Add type definitions for core domain types used throughout the migration:
+
+```typescript
+// src/lib/types/index.ts
+
+/** Represents a curated product result from Scout search */
+export interface Product {
+  id: string;
+  title: string;
+  price: number;
+  retailer: string;
+  url: string;
+  imageUrl?: string;
+  matchReason: string;
+  rank: number;
+}
+
+/** Grove seasonal context for search personalization */
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+
+/** Seasonal context configuration for search queries */
+export interface SeasonalContext {
+  season: Season;
+  keywords: string[];
+  description: string;
+}
+
+export const SEASONAL_CONTEXTS: Record<Season, SeasonalContext> = {
+  winter: {
+    season: 'winter',
+    keywords: ['warm', 'cozy', 'layered', 'cashmere', 'wool', 'insulated'],
+    description: 'Cozy & warm'
+  },
+  spring: {
+    season: 'spring',
+    keywords: ['light layers', 'transitional', 'rain-ready', 'fresh colors'],
+    description: 'Fresh & light'
+  },
+  summer: {
+    season: 'summer',
+    keywords: ['breathable', 'lightweight', 'shorts', 'swimwear', 'linen'],
+    description: 'Cool & breezy'
+  },
+  autumn: {
+    season: 'autumn',
+    keywords: ['layering pieces', 'warm tones', 'flannel', 'boots', 'scarves'],
+    description: 'Layered & warm'
+  }
+};
+```
+
 ---
 
 ### Phase 4: Store Integration
@@ -425,6 +554,48 @@ Replace manual localStorage handling with GroveEngine's `themeStore`:
 </script>
 ```
 
+**Legacy localStorage Migration:**
+
+Existing users may have theme preferences stored under Scout's old localStorage key. Add a one-time migration:
+
+```typescript
+// src/lib/utils/migrate-preferences.ts
+import { browser } from '$app/environment';
+import { themeStore } from '@autumnsgrove/groveengine/ui/stores';
+
+const MIGRATION_KEY = 'scout_prefs_migrated_v1';
+const LEGACY_THEME_KEY = 'theme'; // Old Scout localStorage key
+
+export function migrateUserPreferences(): void {
+  if (!browser) return;
+  if (localStorage.getItem(MIGRATION_KEY)) return; // Already migrated
+
+  // Migrate legacy theme preference
+  const legacyTheme = localStorage.getItem(LEGACY_THEME_KEY);
+  if (legacyTheme === 'dark' || legacyTheme === 'light') {
+    themeStore.set(legacyTheme);
+    localStorage.removeItem(LEGACY_THEME_KEY); // Clean up old key
+  }
+
+  // Mark migration complete
+  localStorage.setItem(MIGRATION_KEY, new Date().toISOString());
+}
+```
+
+Call this once in the root layout:
+
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script>
+  import { migrateUserPreferences } from '$lib/utils/migrate-preferences';
+  import { onMount } from 'svelte';
+
+  onMount(() => {
+    migrateUserPreferences();
+  });
+</script>
+```
+
 #### 4.2 Season Store - Functional Search Context
 
 **This is Scout's killer feature integration with seasons.**
@@ -438,50 +609,115 @@ The season isn't just visual theming - it determines *what kind of clothes Scout
 | **Summer** | Breathable, minimal | Shorts, swimwear, linen, sandals |
 | **Autumn** | Warm tones, layering | Flannel, boots, scarves, earth tones |
 
+**Architecture: Client → Server Season Handoff**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  CLIENT (Browser)                                               │
+│  ┌─────────────────┐     ┌──────────────────────────────────┐  │
+│  │  seasonStore    │────▶│  Search Form submits:            │  │
+│  │  (Svelte store) │     │  { query: "cozy sweater",        │  │
+│  └─────────────────┘     │    season: "winter" }            │  │
+│                          └───────────────┬──────────────────┘  │
+└──────────────────────────────────────────┼─────────────────────┘
+                                           │ POST /api/search
+                                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  SERVER (Cloudflare Workers)                                    │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Orchestrator receives season as parameter               │  │
+│  │  → Injects seasonal context into search                  │  │
+│  │  → Backend handles the rest                              │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Step 1: Client sends season with search request**
+
 ```svelte
-<!-- src/lib/server/agents/orchestrator.ts -->
-<script>
+<!-- src/routes/search/new/+page.svelte -->
+<script lang="ts">
   import { seasonStore } from '@autumnsgrove/groveengine/ui/stores';
-  import { get } from 'svelte/store';
+  import type { Season } from '$lib/types';
 
-  // Inject season context into search queries
-  function buildSearchContext(userQuery: string): string {
-    const season = get(seasonStore);
+  let query = $state('');
+  let loading = $state(false);
 
-    const seasonalContext = {
-      winter: 'warm, cozy, layered, cashmere, wool, insulated',
-      spring: 'light layers, transitional, rain-ready, fresh colors',
-      summer: 'breathable, lightweight, shorts, swimwear, linen',
-      autumn: 'layering pieces, warm tones, flannel, boots, scarves'
-    };
+  async function handleSearch() {
+    loading = true;
 
-    return `${userQuery} (seasonal preference: ${seasonalContext[season]})`;
+    const response = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        season: $seasonStore  // ← Season passed as parameter!
+      })
+    });
+
+    const results = await response.json();
+    // Navigate to results page...
   }
 </script>
 ```
 
-**Server-Side Season Detection:**
-
-Since seasonStore is client-side, we need server-side season awareness:
+**Step 2: Server receives season as a parameter**
 
 ```typescript
-// src/lib/server/utils/season.ts
-export function getCurrentSeason(): 'spring' | 'summer' | 'autumn' | 'winter' {
-  const month = new Date().getMonth(); // 0-11
-  if (month >= 2 && month <= 4) return 'spring';   // Mar-May
-  if (month >= 5 && month <= 7) return 'summer';   // Jun-Aug
-  if (month >= 8 && month <= 10) return 'autumn';  // Sep-Nov
-  return 'winter';                                  // Dec-Feb
+// src/lib/server/agents/orchestrator.ts
+import { SEASONAL_CONTEXTS, type Season } from '$lib/types';
+
+interface SearchRequest {
+  query: string;
+  season: Season;  // ← Received from client
 }
 
-// Allow user override (stored in profile preferences)
-export function getEffectiveSeason(userPreference?: string): Season {
-  if (userPreference && ['spring', 'summer', 'autumn', 'winter'].includes(userPreference)) {
-    return userPreference as Season;
-  }
-  return getCurrentSeason();
+/**
+ * Builds search context by injecting seasonal preferences.
+ * Season is passed from the client - no store imports needed!
+ */
+export function buildSearchContext(request: SearchRequest): string {
+  const { query, season } = request;
+  const context = SEASONAL_CONTEXTS[season];
+
+  return `${query} (seasonal preference: ${context.keywords.join(', ')})`;
+}
+
+// Example usage in the search handler
+export async function handleSearch(request: SearchRequest) {
+  const enrichedQuery = buildSearchContext(request);
+
+  // Pass to backend - it handles everything from here
+  return await searchBackend.search(enrichedQuery);
 }
 ```
+
+**Step 3: API endpoint wires it together**
+
+```typescript
+// src/routes/api/search/+server.ts
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { handleSearch } from '$lib/server/agents/orchestrator';
+import type { Season } from '$lib/types';
+
+export const POST: RequestHandler = async ({ request }) => {
+  const { query, season } = await request.json() as {
+    query: string;
+    season: Season;
+  };
+
+  // Validate season (never trust client input blindly)
+  const validSeasons: Season[] = ['spring', 'summer', 'autumn', 'winter'];
+  const safeSeason = validSeasons.includes(season) ? season : 'winter';
+
+  const results = await handleSearch({ query, season: safeSeason });
+
+  return json(results);
+};
+```
+
+> **Why this works:** The client owns the UI state (season selector), and simply *tells* the server what season to use. The server doesn't need to know about Svelte stores - it just receives a string parameter. Clean separation of concerns!
 
 **UI: Season Selector in Search Form:**
 
@@ -499,17 +735,20 @@ export function getEffectiveSeason(userPreference?: string): Season {
   ];
 </script>
 
-<fieldset class="flex gap-2">
-  <legend class="text-sm font-medium mb-2">Shopping for:</legend>
+<fieldset class="flex gap-2" role="radiogroup" aria-labelledby="season-legend">
+  <legend id="season-legend" class="text-sm font-medium mb-2">Shopping for:</legend>
   {#each seasons as { value, label, icon: Icon, hint }}
     <button
       type="button"
+      role="radio"
+      aria-checked={$seasonStore === value}
+      aria-label="{label} season: {hint}"
       class="flex flex-col items-center p-3 rounded-grove border transition-all"
       class:border-grove-500={$seasonStore === value}
       class:bg-grove-50={$seasonStore === value}
       onclick={() => seasonStore.set(value)}
     >
-      <Icon class="w-5 h-5" />
+      <Icon class="w-5 h-5" aria-hidden="true" />
       <span class="text-sm font-medium">{label}</span>
       <span class="text-xs text-muted">{hint}</span>
     </button>
@@ -530,10 +769,11 @@ export function getEffectiveSeason(userPreference?: string): Season {
 - [ ] Configure footer link sections
 
 #### Seasonal Search Integration (High Priority)
-- [ ] Create `src/lib/server/utils/season.ts` for server-side season detection
-- [ ] Add seasonal context injection to orchestrator agent
-- [ ] Add season selector UI to search form
-- [ ] Store user's season preference in profile
+- [ ] Add season selector UI to search form (uses `seasonStore` from GroveEngine)
+- [ ] Pass season as parameter in search API request (`POST /api/search`)
+- [ ] Update API endpoint to receive and validate season parameter
+- [ ] Update orchestrator to accept season as parameter (not from store!)
+- [ ] Inject seasonal context keywords into search query
 - [ ] Display current season context on results page
 
 #### GlassCarousel Results (High Priority)
@@ -585,8 +825,9 @@ export function getEffectiveSeason(userPreference?: string): Season {
 | `src/app.css` | Import engine styles, reduce custom CSS |
 | `src/routes/+layout.svelte` | Major rewrite using chrome components |
 | `src/routes/search/[id]/+page.svelte` | Use GlassCarousel for results |
-| `src/routes/search/new/+page.svelte` | Add season selector UI |
-| `src/lib/server/agents/orchestrator.ts` | Inject seasonal context |
+| `src/routes/search/new/+page.svelte` | Add season selector UI, pass season to API |
+| `src/routes/api/search/+server.ts` | Receive season parameter, validate, pass to orchestrator |
+| `src/lib/server/agents/orchestrator.ts` | Accept season as parameter, inject into search context |
 | `src/lib/components/scout/ProductCard.svelte` | Use GlassCard |
 | `src/lib/components/scout/SearchCard.svelte` | Use GlassCard |
 
@@ -597,8 +838,9 @@ export function getEffectiveSeason(userPreference?: string): Season {
 | `src/lib/components/chrome/ScoutUserMenu.svelte` | User dropdown menu |
 | `src/lib/components/chrome/ScoutLogo.svelte` | ShoppingBasket branding |
 | `src/lib/components/chrome/index.ts` | Chrome exports |
-| `src/lib/server/utils/season.ts` | Server-side season detection |
+| `src/lib/types/index.ts` | Product, Season, SeasonalContext types |
 | `src/lib/components/scout/SeasonSelector.svelte` | Season picker for search form |
+| `src/lib/utils/migrate-preferences.ts` | Legacy localStorage migration |
 
 ### Files to Remove/Deprecate
 
@@ -694,14 +936,15 @@ If issues arise post-deployment:
 
 ## Implementation Order
 
-1. **Phase 1**: Update dependencies and Tailwind config
-2. **Phase 2**: Migrate Footer (low risk, validates approach)
-3. **Phase 3**: Migrate Header with ScoutLogo (ShoppingBasket icon)
-4. **Phase 4a**: Implement GlassCarousel for curated results (high impact)
-5. **Phase 4b**: Add seasonal search context integration
-6. **Phase 5**: Migrate remaining cards to Glass variants
-7. **Phase 6**: Clean up deprecated CSS
-8. ~~**Phase 7**: Pricing page~~ (Deferred - awaiting graft)
+1. **Phase 0**: Pre-migration audit (verify exports, APIs, CSS overlap)
+2. **Phase 1**: Update dependencies and Tailwind config
+3. **Phase 2**: Migrate Footer (low risk, validates approach)
+4. **Phase 3**: Migrate Header with ScoutLogo (ShoppingBasket icon)
+5. **Phase 4a**: Implement GlassCarousel for curated results (high impact)
+6. **Phase 4b**: Add seasonal search context integration
+7. **Phase 5**: Migrate remaining cards to Glass variants
+8. **Phase 6**: Clean up deprecated CSS
+9. ~~**Phase 7**: Pricing page~~ (Deferred - awaiting graft)
 
 ---
 
