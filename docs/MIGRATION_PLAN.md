@@ -593,13 +593,18 @@ export interface Product {
 }
 
 /** Grove seasonal context for search personalization */
-export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter' | 'midnight' | 'none';
+
+/** Regular seasons (synced with GroveEngine's season cycle) */
+export type RegularSeason = 'spring' | 'summer' | 'autumn' | 'winter';
 
 /** Seasonal context configuration for search queries */
 export interface SeasonalContext {
   season: Season;
   keywords: string[];
   description: string;
+  /** If true, no seasonal context is injected */
+  neutral?: boolean;
 }
 
 export const SEASONAL_CONTEXTS: Record<Season, SeasonalContext> = {
@@ -622,6 +627,26 @@ export const SEASONAL_CONTEXTS: Record<Season, SeasonalContext> = {
     season: 'autumn',
     keywords: ['layering pieces', 'warm tones', 'flannel', 'boots', 'scarves'],
     description: 'Layered & warm'
+  },
+
+  // 🌙 Midnight Mode - Queer, bold, unapologetic fashion
+  midnight: {
+    season: 'midnight',
+    keywords: [
+      'bold colors', 'statement pieces', 'gender-fluid', 'pride',
+      'alternative fashion', 'club wear', 'edgy', 'avant-garde',
+      'leather', 'metallic', 'mesh', 'platform', 'chains',
+      'queer fashion', 'androgynous', 'expressive'
+    ],
+    description: 'Bold & proud'
+  },
+
+  // ○ None - No seasonal context, literal search
+  none: {
+    season: 'none',
+    keywords: [],
+    description: 'Just search',
+    neutral: true  // Signals orchestrator to skip context injection
   }
 };
 ```
@@ -722,12 +747,31 @@ Call this once in the root layout:
 
 The season isn't just visual theming - it determines *what kind of clothes Scout searches for*:
 
-| Season | Search Context | Example Items |
-|--------|----------------|---------------|
-| **Winter** | Cozy, warm, layered | Cashmere sweaters, blankets, wool coats |
-| **Spring** | Light layers, transitional | Light jackets, rain gear, pastels |
-| **Summer** | Breathable, minimal | Shorts, swimwear, linen, sandals |
-| **Autumn** | Warm tones, layering | Flannel, boots, scarves, earth tones |
+| Mode | Search Context | Example Items |
+|------|----------------|---------------|
+| **Winter** ❄️ | Cozy, warm, layered | Cashmere sweaters, blankets, wool coats |
+| **Spring** 🌸 | Light layers, transitional | Light jackets, rain gear, pastels |
+| **Summer** ☀️ | Breathable, minimal | Shorts, swimwear, linen, sandals |
+| **Autumn** 🍂 | Warm tones, layering | Flannel, boots, scarves, earth tones |
+| **Midnight** 🌙 | Bold, queer, expressive | Statement pieces, leather, platforms, pride colors, androgynous fits |
+| **None** ○ | No context (literal search) | Exactly what you searched for, no AI interpretation |
+
+**Midnight Mode Integration with GroveEngine:**
+
+Scout's midnight mode syncs with GroveEngine's theme system:
+
+```typescript
+// When user toggles midnight in GroveEngine's theme, Scout can react
+import { seasonStore } from '@autumnsgrove/groveengine/ui/stores';
+
+// Check if we're in midnight mode
+const isMidnight = $derived($seasonStore === 'midnight');
+
+// Sync visual theme with search context
+// If someone activates midnight theme, they probably want midnight search too!
+```
+
+> **🌙 Easter Egg Idea:** If the user visits Scout between 10pm-4am, subtly suggest midnight mode: *"Late night shopping? Try Midnight mode for bold looks."*
 
 **Architecture: Client → Server Season Handoff**
 
@@ -795,17 +839,32 @@ interface SearchRequest {
 /**
  * Builds search context by injecting seasonal preferences.
  * Season is passed from the client - no store imports needed!
+ *
+ * Handles three cases:
+ * 1. Regular seasons (winter, spring, summer, autumn) - inject seasonal keywords
+ * 2. Midnight mode - inject bold/queer fashion context
+ * 3. None/neutral - no context injection, literal search
  */
 export function buildSearchContext(request: SearchRequest): string {
   const { query, season } = request;
   const context = SEASONAL_CONTEXTS[season];
 
-  return `${query} (seasonal preference: ${context.keywords.join(', ')})`;
+  // Neutral mode: no context injection, return query as-is
+  if (context.neutral) {
+    return query;
+  }
+
+  // All other modes: inject context for the agent swarm
+  return `${query} (style context: ${context.keywords.join(', ')})`;
 }
 
 // Example usage in the search handler
 export async function handleSearch(request: SearchRequest) {
   const enrichedQuery = buildSearchContext(request);
+  const context = SEASONAL_CONTEXTS[request.season];
+
+  // Log for debugging (helpful during development)
+  console.log(`[Scout] Search: "${request.query}" | Mode: ${request.season} | Neutral: ${context.neutral ?? false}`);
 
   // Pass to backend - it handles everything from here
   return await searchBackend.search(enrichedQuery);
@@ -833,8 +892,8 @@ const SearchRequestSchema = z.object({
   query: z.string()
     .min(1, 'Search query is required')
     .max(500, 'Search query too long'),
-  season: z.enum(['spring', 'summer', 'autumn', 'winter'], {
-    errorMap: () => ({ message: 'Invalid season' })
+  season: z.enum(['spring', 'summer', 'autumn', 'winter', 'midnight', 'none'], {
+    errorMap: () => ({ message: 'Invalid season or mode' })
   })
 });
 
@@ -869,31 +928,52 @@ export const POST: RequestHandler = async ({ request }) => {
 <!-- src/routes/search/new/+page.svelte -->
 <script lang="ts">
   import { seasonStore } from '@autumnsgrove/groveengine/ui/stores';
-  import { Snowflake, Flower2, Sun, Leaf } from 'lucide-svelte';
+  import { Snowflake, Flower2, Sun, Leaf, Moon, Circle } from 'lucide-svelte';
   import type { Season } from '$lib/types';
 
-  const seasons = [
+  // Regular seasons - synced with GroveEngine's season cycle
+  const regularSeasons = [
     { value: 'winter' as Season, label: 'Winter', icon: Snowflake, hint: 'Cozy & warm' },
     { value: 'spring' as Season, label: 'Spring', icon: Flower2, hint: 'Fresh & light' },
     { value: 'summer' as Season, label: 'Summer', icon: Sun, hint: 'Cool & breezy' },
     { value: 'autumn' as Season, label: 'Autumn', icon: Leaf, hint: 'Layered & warm' },
   ];
 
+  // Special modes
+  const specialModes = [
+    {
+      value: 'midnight' as Season,
+      label: 'Midnight',
+      icon: Moon,
+      hint: 'Bold & proud',
+      className: 'midnight-mode'  // Special purple/rose styling
+    },
+    {
+      value: 'none' as Season,
+      label: 'None',
+      icon: Circle,
+      hint: 'Just search',
+      className: 'neutral-mode'
+    },
+  ];
+
+  const allSeasons = [...regularSeasons, ...specialModes];
+
   // Keyboard navigation for radiogroup pattern
   function handleKeydown(event: KeyboardEvent) {
-    const currentIndex = seasons.findIndex(s => s.value === $seasonStore);
+    const currentIndex = allSeasons.findIndex(s => s.value === $seasonStore);
     let newIndex = currentIndex;
 
     switch (event.key) {
       case 'ArrowRight':
       case 'ArrowDown':
         event.preventDefault();
-        newIndex = (currentIndex + 1) % seasons.length;
+        newIndex = (currentIndex + 1) % allSeasons.length;
         break;
       case 'ArrowLeft':
       case 'ArrowUp':
         event.preventDefault();
-        newIndex = (currentIndex - 1 + seasons.length) % seasons.length;
+        newIndex = (currentIndex - 1 + allSeasons.length) % allSeasons.length;
         break;
       case 'Home':
         event.preventDefault();
@@ -901,13 +981,13 @@ export const POST: RequestHandler = async ({ request }) => {
         break;
       case 'End':
         event.preventDefault();
-        newIndex = seasons.length - 1;
+        newIndex = allSeasons.length - 1;
         break;
       default:
         return;
     }
 
-    seasonStore.setSeason(seasons[newIndex].value);
+    seasonStore.setSeason(allSeasons[newIndex].value);
     // Focus the newly selected button
     const buttons = document.querySelectorAll('[role="radio"]');
     (buttons[newIndex] as HTMLElement)?.focus();
@@ -915,13 +995,15 @@ export const POST: RequestHandler = async ({ request }) => {
 </script>
 
 <fieldset
-  class="flex gap-2"
+  class="flex flex-wrap gap-2"
   role="radiogroup"
   aria-labelledby="season-legend"
   onkeydown={handleKeydown}
 >
-  <legend id="season-legend" class="text-sm font-medium mb-2">Shopping for:</legend>
-  {#each seasons as { value, label, icon: Icon, hint }, index}
+  <legend id="season-legend" class="text-sm font-medium mb-2 w-full">Shopping for:</legend>
+
+  <!-- Regular seasons -->
+  {#each regularSeasons as { value, label, icon: Icon, hint }}
     <button
       type="button"
       role="radio"
@@ -938,7 +1020,51 @@ export const POST: RequestHandler = async ({ request }) => {
       <span class="text-xs text-muted">{hint}</span>
     </button>
   {/each}
+
+  <!-- Separator -->
+  <div class="w-px bg-border self-stretch mx-1" aria-hidden="true"></div>
+
+  <!-- Special modes: Midnight & None -->
+  {#each specialModes as { value, label, icon: Icon, hint, className }}
+    <button
+      type="button"
+      role="radio"
+      aria-checked={$seasonStore === value}
+      aria-label="{label} mode: {hint}"
+      tabindex={$seasonStore === value ? 0 : -1}
+      class="flex flex-col items-center p-3 rounded-grove border transition-all focus:outline-none focus-visible:ring-2 {className}"
+      class:border-purple-500={$seasonStore === value && value === 'midnight'}
+      class:bg-purple-50={$seasonStore === value && value === 'midnight'}
+      class:dark:bg-purple-950={$seasonStore === value && value === 'midnight'}
+      class:border-gray-400={$seasonStore === value && value === 'none'}
+      class:bg-gray-50={$seasonStore === value && value === 'none'}
+      onclick={() => seasonStore.setSeason(value)}
+    >
+      <Icon class="w-5 h-5" aria-hidden="true" />
+      <span class="text-sm font-medium">{label}</span>
+      <span class="text-xs text-muted">{hint}</span>
+    </button>
+  {/each}
 </fieldset>
+```
+
+**Midnight Mode Styling:**
+
+```css
+/* Midnight mode uses purple/rose tones - synced with GroveEngine's midnight theme */
+.midnight-mode {
+  --accent: theme('colors.purple.500');
+  --accent-foreground: theme('colors.purple.50');
+}
+
+.midnight-mode:hover {
+  border-color: theme('colors.purple.400');
+  background: theme('colors.purple.50');
+}
+
+:global(.dark) .midnight-mode:hover {
+  background: theme('colors.purple.950/50');
+}
 ```
 
 > **Accessibility Note:** This implements the [WAI-ARIA radio group pattern](https://www.w3.org/WAI/ARIA/apg/patterns/radio/). Arrow keys cycle through options, Home/End jump to first/last, and only the selected option is in the tab order (`tabindex={0/-1}`).
