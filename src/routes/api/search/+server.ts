@@ -33,7 +33,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		);
 	}
 
-	const { query, structured, searchProvider } = parseResult.data;
+	const { query, structured, searchProvider, season } = parseResult.data;
 
 	// Check for cached results first
 	const cachedResult = await findCachedSearch(KV, query, structured);
@@ -128,7 +128,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		query_freeform: query,
 		query_structured: structured ?? null,
 		profile: profileContext,
-		searchProvider: searchProvider || 'brave'
+		searchProvider: searchProvider || 'brave',
+		season: season ?? null
 	};
 
 	// Track search created

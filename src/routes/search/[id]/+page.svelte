@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { invalidate } from '$app/navigation';
 	import { Icons, ProductCard, StatusBadge, LoadingSkeleton } from '$lib/components/scout';
+	import { GlassCarousel } from '@autumnsgrove/groveengine/ui';
 	import type { CuratedResults } from '$lib/types';
 
 	let { data } = $props();
@@ -152,21 +153,29 @@
 			</div>
 		</div>
 
-		<!-- Product Grid -->
-		<div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
-			{#each data.results.items as item, index}
-				<ProductCard
-					name={item.name}
-					price={item.price_current}
-					originalPrice={item.price_original}
-					retailer={item.retailer}
-					url={item.url}
-					imageUrl={item.image_url}
-					matchScore={item.match_score}
-					matchReason={item.match_reason}
-					{index}
-				/>
-			{/each}
+		<!-- Product Carousel -->
+		<div class="mb-8">
+			<GlassCarousel
+				itemCount={data.results.items.length}
+				showDots
+				showArrows
+				variant="frosted"
+			>
+				{#snippet item(index)}
+					{@const product = data.results.items[index]}
+					<ProductCard
+						name={product.name}
+						price={product.price_current}
+						originalPrice={product.price_original}
+						retailer={product.retailer}
+						url={product.url}
+						imageUrl={product.image_url}
+						matchScore={product.match_score}
+						matchReason={product.match_reason}
+						{index}
+					/>
+				{/snippet}
+			</GlassCarousel>
 		</div>
 
 		<!-- Results Footer -->

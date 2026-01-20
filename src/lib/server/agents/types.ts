@@ -22,6 +22,7 @@ export interface SavedProduct {
 
 export interface SearchContext {
 	query: string;
+	season?: 'spring' | 'summer' | 'autumn' | 'winter' | null;
 	profile: {
 		sizes?: Record<string, string | undefined>;
 		color_favorites?: string[];

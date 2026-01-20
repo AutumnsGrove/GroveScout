@@ -211,6 +211,14 @@ export async function runSearchOrchestrator(
 	const searchResultsText = allResults.join('\n\n---\n\n');
 	const profileContext = buildProfileContext(context.profile);
 
+	// Season display names for prompt context
+	const SEASON_DISPLAY: Record<string, string> = {
+		spring: 'Spring', summer: 'Summer', autumn: 'Autumn', winter: 'Winter'
+	};
+	const seasonContext = context.season
+		? `**Season:** ${SEASON_DISPLAY[context.season]} - Prioritize seasonally-appropriate products for this time of year.\n\n`
+		: '';
+
 	// Run orchestrator to extract products
 	const orchestratorResponse = await anthropic.messages.create({
 		model: AGENT_CONFIG.model.primary,
@@ -222,7 +230,7 @@ export async function runSearchOrchestrator(
 				content: `## Search Request
 **Query:** ${context.query}
 
-${profileContext}
+${seasonContext}${profileContext}
 
 ## Search Results (${allResults.length} sources)
 ${searchResultsText}
@@ -283,7 +291,7 @@ Extract ALL products that match or could match the criteria. Be thorough - extra
 				content: `## Original Request
 **Query:** ${context.query}
 
-${profileContext}
+${seasonContext}${profileContext}
 
 ## Products Found (${rawProducts.length} items)
 ${JSON.stringify(rawProducts, null, 2)}

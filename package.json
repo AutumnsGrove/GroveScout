@@ -35,10 +35,13 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.71.0",
-		"@autumnsgrove/groveengine": "^0.6.1",
+		"@autumnsgrove/groveengine": "^0.9.80",
+		"@lucide/svelte": "^0.562.0",
 		"@sveltejs/adapter-cloudflare": "^7.2.4",
+		"bits-ui": "^2.15.4",
 		"resend": "^6.5.2",
 		"stripe": "^20.0.0",
+		"tailwind-variants": "^3.2.2",
 		"wrangler": "^4.51.0",
 		"zod": "^4.1.13"
 	}
