@@ -81,6 +81,8 @@ The current layout contains ~270 lines of custom implementation:
 
 ### Phase 0: Pre-Migration Audit
 
+> **✅ Version Verified:** groveengine@0.9.80 existence confirmed by package maintainer (2026-01-20). APIs verified against source at `/Projects/GroveEngine/packages/engine/src/lib/ui/`.
+
 Before beginning implementation, verify that all required exports and APIs are available in groveengine 0.9.80.
 
 #### 0.1 Verify GroveEngine Exports
@@ -97,15 +99,17 @@ npm view @autumnsgrove/groveengine@0.9.80 exports
 
 | API | Import Path | Status |
 |-----|-------------|--------|
-| `Header` | `@autumnsgrove/groveengine/ui/chrome` | ⬜ Verify |
-| `Footer` | `@autumnsgrove/groveengine/ui/chrome` | ⬜ Verify |
-| `GlassCarousel` | `@autumnsgrove/groveengine/ui` | ⬜ Verify |
-| `GlassCard` | `@autumnsgrove/groveengine/ui` | ⬜ Verify |
-| `GlassOverlay` | `@autumnsgrove/groveengine/ui` | ⬜ Verify |
-| `themeStore` | `@autumnsgrove/groveengine/ui/stores` | ⬜ Verify |
-| `seasonStore` | `@autumnsgrove/groveengine/ui/stores` | ⬜ Verify |
-| `grovePreset` | `@autumnsgrove/groveengine/ui/tailwind` | ⬜ Verify |
-| Grove styles | `@autumnsgrove/groveengine/ui/styles` | ⬜ Verify |
+| `Header` | `@autumnsgrove/groveengine/ui/chrome` | ✅ Verified |
+| `Footer` | `@autumnsgrove/groveengine/ui/chrome` | ✅ Verified |
+| `GlassCarousel` | `@autumnsgrove/groveengine/ui` | ✅ Verified |
+| `GlassCard` | `@autumnsgrove/groveengine/ui` | ✅ Verified |
+| `GlassOverlay` | `@autumnsgrove/groveengine/ui` | ✅ Verified |
+| `themeStore` | `@autumnsgrove/groveengine/ui/stores` | ✅ Verified |
+| `seasonStore` | `@autumnsgrove/groveengine/ui/stores` | ✅ Verified |
+| `grovePreset` | `@autumnsgrove/groveengine/ui/tailwind` | ⬜ Verify at implementation |
+| Grove styles | `@autumnsgrove/groveengine/ui/styles` | ⬜ Verify at implementation |
+
+> **Verification method:** Confirmed against source files in `GroveEngine/packages/engine/src/lib/ui/`
 
 #### 0.3 GlassCarousel API Check
 
@@ -709,6 +713,17 @@ export async function handleSearch(request: SearchRequest) {
 }
 ```
 
+> ⚠️ **Testing Note:** The query enrichment approach (appending seasonal keywords) should be tested with your actual search backend before implementation. Some search APIs may:
+> - Treat parenthetical text differently than main query
+> - Have token limits that could truncate seasonal context
+> - Perform better with structured filters vs. query modification
+>
+> **Recommended:** Test these queries manually first:
+> - `"cozy sweater (seasonal preference: warm, cozy, layered)"`
+> - `"summer dress (seasonal preference: breathable, lightweight)"`
+>
+> If results are poor, consider using the backend's filter/facet API instead of query modification.
+
 **Step 3: API endpoint wires it together**
 
 ```typescript
@@ -878,6 +893,16 @@ export const POST: RequestHandler = async ({ request }) => {
 - [ ] Implement swipe gestures for mobile
 - [ ] Add feedback buttons (thumbs up/down) to carousel cards
 
+#### Accessibility Enhancements
+- [ ] Add ARIA live region for search status updates (`aria-live="polite"`)
+- [ ] Implement focus management in GlassCarousel (focus trap when open)
+- [ ] Add skip navigation link ("Skip to main content")
+- [ ] Ensure all images have descriptive alt text (not just product title)
+- [ ] Test with screen readers (VoiceOver, NVDA)
+- [ ] Verify color contrast meets WCAG AA (4.5:1 for text)
+- [ ] Add `prefers-reduced-motion` support for carousel animations
+- [ ] Ensure focus indicators are visible on all interactive elements
+
 #### Cards & Containers
 - [ ] Migrate `ProductCard.svelte` to use `GlassCard`
 - [ ] Migrate `SearchCard.svelte` to use `GlassCard`
@@ -1005,6 +1030,102 @@ export const POST: RequestHandler = async ({ request }) => {
 - [ ] Firefox
 - [ ] Safari (backdrop-filter fallbacks)
 - [ ] Mobile browsers
+
+### Concrete Test Cases
+
+#### Season Integration Tests
+```typescript
+// src/routes/api/search/+server.test.ts
+describe('Search API', () => {
+  it('accepts valid season parameter', async () => {
+    const response = await POST({ query: 'cozy sweater', season: 'winter' });
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects invalid season parameter', async () => {
+    const response = await POST({ query: 'test', season: 'invalid' });
+    expect(response.status).toBe(400);
+  });
+
+  it('includes seasonal context in search', async () => {
+    const result = await handleSearch({ query: 'jacket', season: 'winter' });
+    // Verify seasonal keywords were injected
+    expect(result.enrichedQuery).toContain('warm');
+  });
+});
+```
+
+#### Accessibility Tests
+```typescript
+// src/lib/components/scout/SeasonSelector.test.ts
+describe('SeasonSelector', () => {
+  it('supports keyboard navigation', async () => {
+    render(SeasonSelector);
+    const winter = screen.getByRole('radio', { name: /winter/i });
+    winter.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('radio', { name: /spring/i })).toHaveFocus();
+  });
+
+  it('has correct ARIA attributes', () => {
+    render(SeasonSelector);
+    expect(screen.getByRole('radiogroup')).toBeInTheDocument();
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+  });
+});
+```
+
+#### localStorage Migration Tests
+```typescript
+// src/lib/utils/migrate-preferences.test.ts
+describe('migrateUserPreferences', () => {
+  it('migrates legacy theme preference', () => {
+    localStorage.setItem('theme', 'dark');
+    migrateUserPreferences();
+    expect(localStorage.getItem('theme')).toBeNull(); // Cleaned up
+  });
+
+  it('handles localStorage errors gracefully', () => {
+    // Mock localStorage.getItem to throw
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('QuotaExceeded');
+    });
+    expect(() => migrateUserPreferences()).not.toThrow();
+  });
+
+  it('only runs migration once', () => {
+    localStorage.setItem('theme', 'dark');
+    migrateUserPreferences();
+    migrateUserPreferences(); // Second call
+    expect(localStorage.getItem('scout_prefs_migrated_v1')).toBeTruthy();
+  });
+});
+```
+
+---
+
+## Security Audit Checklist
+
+### Content Security Policy (CSP)
+- [ ] Allow font origins: `fonts.googleapis.com`, `fonts.gstatic.com`
+- [ ] Verify `style-src` allows inline styles (for Glass components)
+- [ ] Test CSP doesn't block GlassCarousel animations
+
+### XSS Prevention
+- [ ] Sanitize `product.matchReason` before rendering (user-influenced content)
+- [ ] Sanitize `product.title` and `product.retailer` from external APIs
+- [ ] Use `{@html}` sparingly and only with sanitized content
+- [ ] Review all `target="_blank"` links have `rel="noopener"`
+
+### Input Validation
+- [ ] Zod validates all API inputs (already implemented ✅)
+- [ ] Query length limits prevent DoS (max 500 chars ✅)
+- [ ] Season enum validation prevents injection
+
+### External Content
+- [ ] Product images loaded via `img` tags (not background-image with user URLs)
+- [ ] External links (`product.url`) go through redirect warning or are trusted domains
+- [ ] Avoid dynamic code evaluation with user data
 
 ---
 
