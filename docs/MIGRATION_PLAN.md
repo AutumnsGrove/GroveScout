@@ -109,17 +109,25 @@ npm view @autumnsgrove/groveengine@0.9.80 exports
 
 #### 0.3 GlassCarousel API Check
 
-Verify the carousel accepts these props:
+Verify the carousel accepts these props (confirmed ✅):
 
 ```typescript
 interface GlassCarouselProps {
-  items: unknown[];
+  /** Array of images for image mode */
+  images?: CarouselImage[];
+  /** Number of items for custom content mode */
+  itemCount?: number;
   showDots?: boolean;
   showArrows?: boolean;
   autoplay?: boolean;
-  // Verify snippet slot API for custom item rendering
+  autoplayInterval?: number;
+  variant?: "default" | "frosted" | "minimal";
+  /** Custom content snippet - receives slide index */
+  item?: Snippet<[number]>;
 }
 ```
+
+> **Note:** GlassCarousel uses `itemCount` (not `items`). The `item` snippet receives only the **index** - access your data array by index inside the snippet.
 
 #### 0.4 CSS Overlap Audit
 
@@ -185,10 +193,14 @@ Move font loading from CSS `@import` to HTML `<link>` tags for better performanc
 <!-- src/app.html (in <head>) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Only include weights actually used: 400 (body), 500 (medium), 600 (semibold), 700 (bold) -->
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
 ```
 
-> **Why?** CSS `@import` for fonts blocks rendering. HTML `<link>` with `preconnect` allows the browser to establish connections early, reducing load time.
+> **Why?**
+> - CSS `@import` for fonts blocks rendering. HTML `<link>` with `preconnect` allows the browser to establish connections early, reducing load time.
+> - `display=swap` prevents invisible text during font loading (FOUT over FOIT).
+> - We removed weight 300 (light) since it's not used in the design system. Each weight adds ~15-20KB.
 
 #### 1.4 Update CSS Imports
 
@@ -374,12 +386,16 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
 <script lang="ts">
   import { GlassCarousel, GlassCard } from '@autumnsgrove/groveengine/ui';
   import { ShoppingBag, ExternalLink, ThumbsUp, ThumbsDown } from 'lucide-svelte';
+  import type { Product } from '$lib/types';
 
   interface Props {
     data: { curatedItems: Product[] };
   }
 
   let { data }: Props = $props();
+
+  // Helper to get product by index (GlassCarousel passes index to snippet)
+  const getProduct = (index: number) => data.curatedItems[index];
 </script>
 
 <section class="py-8">
@@ -388,13 +404,14 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
   </h2>
 
   <GlassCarousel
-    items={data.curatedItems}
+    itemCount={data.curatedItems.length}
     showDots={true}
     showArrows={true}
     autoplay={false}
   >
-    {#snippet item(product: Product, index: number)}
-      <GlassCard class="w-[300px] overflow-hidden">
+    {#snippet item(index)}
+      {@const product = getProduct(index)}
+      <GlassCard class="w-full h-full overflow-hidden">
         <!-- Product Image -->
         <div class="aspect-square bg-surface-subtle relative">
           {#if product.imageUrl}
@@ -442,10 +459,10 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
             >
               View <ExternalLink class="w-4 h-4 ml-1" />
             </a>
-            <button class="grove-btn grove-btn-ghost grove-btn-sm">
+            <button class="grove-btn grove-btn-ghost grove-btn-sm" aria-label="Like this product">
               <ThumbsUp class="w-4 h-4" />
             </button>
-            <button class="grove-btn grove-btn-ghost grove-btn-sm">
+            <button class="grove-btn grove-btn-ghost grove-btn-sm" aria-label="Dislike this product">
               <ThumbsDown class="w-4 h-4" />
             </button>
           </div>
@@ -696,26 +713,43 @@ export async function handleSearch(request: SearchRequest) {
 
 ```typescript
 // src/routes/api/search/+server.ts
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { handleSearch } from '$lib/server/agents/orchestrator';
-import type { Season } from '$lib/types';
+import { z } from 'zod';
+
+// Zod schema for type-safe runtime validation
+const SearchRequestSchema = z.object({
+  query: z.string()
+    .min(1, 'Search query is required')
+    .max(500, 'Search query too long'),
+  season: z.enum(['spring', 'summer', 'autumn', 'winter'], {
+    errorMap: () => ({ message: 'Invalid season' })
+  })
+});
 
 export const POST: RequestHandler = async ({ request }) => {
-  const { query, season } = await request.json() as {
-    query: string;
-    season: Season;
-  };
+  const body = await request.json();
 
-  // Validate season (never trust client input blindly)
-  const validSeasons: Season[] = ['spring', 'summer', 'autumn', 'winter'];
-  const safeSeason = validSeasons.includes(season) ? season : 'winter';
+  // Validate with Zod - throws ZodError on invalid input
+  const parseResult = SearchRequestSchema.safeParse(body);
 
-  const results = await handleSearch({ query, season: safeSeason });
+  if (!parseResult.success) {
+    // Return 400 with validation errors
+    throw error(400, {
+      message: 'Invalid request',
+      errors: parseResult.error.flatten().fieldErrors
+    });
+  }
+
+  const { query, season } = parseResult.data;
+  const results = await handleSearch({ query, season });
 
   return json(results);
 };
 ```
+
+> **Why Zod?** It provides both TypeScript types AND runtime validation in one definition. If the schema passes, you get fully typed data. If it fails, you get detailed error messages. This aligns with project standards (see AGENT.md).
 
 > **Why this works:** The client owns the UI state (season selector), and simply *tells* the server what season to use. The server doesn't need to know about Svelte stores - it just receives a string parameter. Clean separation of concerns!
 
@@ -723,30 +757,71 @@ export const POST: RequestHandler = async ({ request }) => {
 
 ```svelte
 <!-- src/routes/search/new/+page.svelte -->
-<script>
+<script lang="ts">
   import { seasonStore } from '@autumnsgrove/groveengine/ui/stores';
   import { Snowflake, Flower2, Sun, Leaf } from 'lucide-svelte';
+  import type { Season } from '$lib/types';
 
   const seasons = [
-    { value: 'winter', label: 'Winter', icon: Snowflake, hint: 'Cozy & warm' },
-    { value: 'spring', label: 'Spring', icon: Flower2, hint: 'Fresh & light' },
-    { value: 'summer', label: 'Summer', icon: Sun, hint: 'Cool & breezy' },
-    { value: 'autumn', label: 'Autumn', icon: Leaf, hint: 'Layered & warm' },
+    { value: 'winter' as Season, label: 'Winter', icon: Snowflake, hint: 'Cozy & warm' },
+    { value: 'spring' as Season, label: 'Spring', icon: Flower2, hint: 'Fresh & light' },
+    { value: 'summer' as Season, label: 'Summer', icon: Sun, hint: 'Cool & breezy' },
+    { value: 'autumn' as Season, label: 'Autumn', icon: Leaf, hint: 'Layered & warm' },
   ];
+
+  // Keyboard navigation for radiogroup pattern
+  function handleKeydown(event: KeyboardEvent) {
+    const currentIndex = seasons.findIndex(s => s.value === $seasonStore);
+    let newIndex = currentIndex;
+
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        event.preventDefault();
+        newIndex = (currentIndex + 1) % seasons.length;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        event.preventDefault();
+        newIndex = (currentIndex - 1 + seasons.length) % seasons.length;
+        break;
+      case 'Home':
+        event.preventDefault();
+        newIndex = 0;
+        break;
+      case 'End':
+        event.preventDefault();
+        newIndex = seasons.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    seasonStore.setSeason(seasons[newIndex].value);
+    // Focus the newly selected button
+    const buttons = document.querySelectorAll('[role="radio"]');
+    (buttons[newIndex] as HTMLElement)?.focus();
+  }
 </script>
 
-<fieldset class="flex gap-2" role="radiogroup" aria-labelledby="season-legend">
+<fieldset
+  class="flex gap-2"
+  role="radiogroup"
+  aria-labelledby="season-legend"
+  onkeydown={handleKeydown}
+>
   <legend id="season-legend" class="text-sm font-medium mb-2">Shopping for:</legend>
-  {#each seasons as { value, label, icon: Icon, hint }}
+  {#each seasons as { value, label, icon: Icon, hint }, index}
     <button
       type="button"
       role="radio"
       aria-checked={$seasonStore === value}
       aria-label="{label} season: {hint}"
-      class="flex flex-col items-center p-3 rounded-grove border transition-all"
+      tabindex={$seasonStore === value ? 0 : -1}
+      class="flex flex-col items-center p-3 rounded-grove border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-grove-500"
       class:border-grove-500={$seasonStore === value}
       class:bg-grove-50={$seasonStore === value}
-      onclick={() => seasonStore.set(value)}
+      onclick={() => seasonStore.setSeason(value)}
     >
       <Icon class="w-5 h-5" aria-hidden="true" />
       <span class="text-sm font-medium">{label}</span>
@@ -755,6 +830,8 @@ export const POST: RequestHandler = async ({ request }) => {
   {/each}
 </fieldset>
 ```
+
+> **Accessibility Note:** This implements the [WAI-ARIA radio group pattern](https://www.w3.org/WAI/ARIA/apg/patterns/radio/). Arrow keys cycle through options, Home/End jump to first/last, and only the selected option is in the tab order (`tabindex={0/-1}`).
 
 ---
 
@@ -767,6 +844,24 @@ export const POST: RequestHandler = async ({ request }) => {
 - [ ] Create `ScoutLogo.svelte` with ShoppingBasket icon
 - [ ] Configure `navItems` for Scout-specific navigation
 - [ ] Configure footer link sections
+
+#### HTML & Configuration Updates
+- [ ] Update `src/app.html` with font preconnect links
+- [ ] Verify `manifest.json` theme_color matches new design
+- [ ] Update meta theme-color tag if present
+- [ ] Ensure CSP headers allow font origins (fonts.googleapis.com, fonts.gstatic.com)
+
+#### Cleanup & Removal
+- [ ] Remove legacy `src/lib/components/ThemeToggle.svelte`
+- [ ] Update all imports that referenced removed components
+- [ ] Remove unused Scout-specific CSS classes from `app.css`
+- [ ] Clean up any orphaned component files
+
+#### PWA & Service Worker
+- [ ] Test ServiceWorker registration doesn't break with new layout
+- [ ] Verify offline functionality still works
+- [ ] Test app install flow (Add to Home Screen)
+- [ ] Validate manifest.json icons are correct
 
 #### Seasonal Search Integration (High Priority)
 - [ ] Add season selector UI to search form (uses `seasonStore` from GroveEngine)
@@ -929,8 +1024,39 @@ If issues arise post-deployment:
 1. **Visual Consistency**: Scout looks like part of the Grove family
 2. **Code Reduction**: 50%+ reduction in custom chrome code
 3. **Maintenance**: Single source of truth for shared components
-4. **Performance**: No increase in bundle size or load time
+4. **Performance**: No regression (see budgets below)
 5. **Accessibility**: Maintains or improves WCAG compliance
+
+### Performance Budgets
+
+Measure before and after migration:
+
+| Metric | Budget | How to Measure |
+|--------|--------|----------------|
+| **Bundle Size** | ≤ +5% increase | `npm run build && du -sh .svelte-kit/cloudflare` |
+| **Lighthouse Performance** | ≥ 90 | Chrome DevTools → Lighthouse |
+| **Lighthouse Accessibility** | ≥ 95 | Chrome DevTools → Lighthouse |
+| **First Contentful Paint** | ≤ 1.5s | Lighthouse or WebPageTest |
+| **Time to Interactive** | ≤ 3.0s | Lighthouse |
+| **Cumulative Layout Shift** | ≤ 0.1 | Lighthouse |
+
+**Pre-migration baseline command:**
+```bash
+# Record baseline metrics before starting
+npm run build
+echo "Bundle size: $(du -sh .svelte-kit/cloudflare)"
+# Run Lighthouse audit and save report
+```
+
+**Post-migration validation:**
+```bash
+# Compare after Phase 6 (CSS cleanup)
+npm run build
+echo "Bundle size: $(du -sh .svelte-kit/cloudflare)"
+# Run Lighthouse audit and compare
+```
+
+If any budget is exceeded, investigate tree-shaking, remove unused imports, or defer non-critical components.
 
 ---
 
