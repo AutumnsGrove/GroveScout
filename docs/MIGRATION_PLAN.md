@@ -13,6 +13,15 @@ This document outlines a comprehensive plan to migrate GroveScout from its custo
 3. Leverage shared stores (theme, season) for Grove-wide coherence
 4. Reduce maintenance burden by using centralized UI components
 
+### Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Logo Icon** | `ShoppingBasket` (lucide) | Consistent with Workshop in GroveEngine |
+| **Seasons** | Functional integration | Season determines *what* Scout searches for |
+| **Results Display** | `GlassCarousel` | Beautiful presentation for 5 curated items |
+| **Pricing Page** | Deferred | Will use future Pricing graft from engine |
+
 ---
 
 ## Current State Analysis
@@ -30,7 +39,7 @@ The current layout contains ~270 lines of custom implementation:
 | Total | ~270 | Entirely custom implementation |
 
 **Key Features in Current Implementation:**
-- Custom Scout logo (search icon in green box)
+- Custom Scout logo (will use `ShoppingBasket` lucide icon)
 - User authentication state display (avatar, email)
 - Credit balance display in header
 - Theme toggle (light/dark)
@@ -64,7 +73,7 @@ The current layout contains ~270 lines of custom implementation:
 | `GlassNavbar` | Glass navigation bar | Alternative header style |
 | `GlassOverlay` | Modal/sheet backdrop | User menu, mobile menu |
 | `GlassConfirmDialog` | Confirmation modals | Delete confirmations |
-| `GlassCarousel` | Glass-styled carousel | Product galleries |
+| **`GlassCarousel`** | Glass-styled carousel | **Primary: 5 curated results display** |
 
 ---
 
@@ -231,18 +240,17 @@ Replace the monolithic `+layout.svelte` with composed chrome components:
 </div>
 ```
 
-**ScoutLogo.svelte** - Scout-branded logo (if needed):
+**ScoutLogo.svelte** - Scout-branded logo using ShoppingBasket icon:
 
 ```svelte
 <!-- src/lib/components/chrome/ScoutLogo.svelte -->
 <script lang="ts">
-  import { Logo } from '@autumnsgrove/groveengine/ui';
-  import { Icons } from '$lib/components/scout';
+  import { ShoppingBasket } from 'lucide-svelte';
 </script>
 
 <a href="/" class="flex items-center gap-2">
   <div class="w-8 h-8 bg-grove-500 rounded-grove flex items-center justify-center">
-    <Icons name="search" size="sm" class="text-white" />
+    <ShoppingBasket class="w-5 h-5 text-white" />
   </div>
   <span class="font-serif text-xl">Scout</span>
 </a>
@@ -282,7 +290,99 @@ Replace custom `scout-product-card` with `GlassCard`:
 </GlassCard>
 ```
 
-#### 3.3 Button Migration
+#### 3.3 GlassCarousel for Curated Results (Primary Feature)
+
+The star of the show - Scout's 5 curated results displayed in a beautiful glass carousel:
+
+```svelte
+<!-- src/routes/search/[id]/+page.svelte -->
+<script lang="ts">
+  import { GlassCarousel, GlassCard } from '@autumnsgrove/groveengine/ui';
+  import { ShoppingBag, ExternalLink, ThumbsUp, ThumbsDown } from 'lucide-svelte';
+
+  interface Props {
+    data: { curatedItems: Product[] };
+  }
+
+  let { data }: Props = $props();
+</script>
+
+<section class="py-8">
+  <h2 class="font-serif text-2xl mb-6 text-center">
+    Your Top 5 Picks
+  </h2>
+
+  <GlassCarousel
+    items={data.curatedItems}
+    showDots={true}
+    showArrows={true}
+    autoplay={false}
+  >
+    {#snippet item(product: Product, index: number)}
+      <GlassCard class="w-[300px] overflow-hidden">
+        <!-- Product Image -->
+        <div class="aspect-square bg-surface-subtle relative">
+          {#if product.imageUrl}
+            <img
+              src={product.imageUrl}
+              alt={product.title}
+              class="w-full h-full object-cover"
+            />
+          {:else}
+            <div class="w-full h-full flex items-center justify-center">
+              <ShoppingBag class="w-12 h-12 text-muted" />
+            </div>
+          {/if}
+
+          <!-- Rank badge -->
+          <div class="absolute top-3 left-3 w-8 h-8 rounded-full bg-grove-500 text-white flex items-center justify-center font-bold">
+            {index + 1}
+          </div>
+        </div>
+
+        <!-- Product Info -->
+        <div class="p-4 space-y-3">
+          <h3 class="font-medium line-clamp-2">{product.title}</h3>
+
+          <div class="flex items-center justify-between">
+            <span class="text-lg font-semibold text-grove-600">
+              ${product.price}
+            </span>
+            <span class="text-sm text-muted">{product.retailer}</span>
+          </div>
+
+          <!-- Match reason -->
+          <p class="text-sm text-muted italic">
+            "{product.matchReason}"
+          </p>
+
+          <!-- Actions -->
+          <div class="flex gap-2 pt-2">
+            <a
+              href={product.url}
+              target="_blank"
+              rel="noopener"
+              class="grove-btn grove-btn-primary grove-btn-sm flex-1"
+            >
+              View <ExternalLink class="w-4 h-4 ml-1" />
+            </a>
+            <button class="grove-btn grove-btn-ghost grove-btn-sm">
+              <ThumbsUp class="w-4 h-4" />
+            </button>
+            <button class="grove-btn grove-btn-ghost grove-btn-sm">
+              <ThumbsDown class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </GlassCard>
+    {/snippet}
+  </GlassCarousel>
+</section>
+```
+
+**Mobile Behavior:** On mobile, the carousel becomes swipeable with smooth momentum scrolling. The glass effect creates a beautiful layered appearance as cards overlap during scroll.
+
+#### 3.4 Button Migration
 
 | Scout Class | Grove Equivalent |
 |-------------|------------------|
@@ -325,22 +425,96 @@ Replace manual localStorage handling with GroveEngine's `themeStore`:
 </script>
 ```
 
-#### 4.2 Season Store (Optional Enhancement)
+#### 4.2 Season Store - Functional Search Context
 
-Scout can optionally participate in Grove's seasonal theming:
+**This is Scout's killer feature integration with seasons.**
+
+The season isn't just visual theming - it determines *what kind of clothes Scout searches for*:
+
+| Season | Search Context | Example Items |
+|--------|----------------|---------------|
+| **Winter** | Cozy, warm, layered | Cashmere sweaters, blankets, wool coats |
+| **Spring** | Light layers, transitional | Light jackets, rain gear, pastels |
+| **Summer** | Breathable, minimal | Shorts, swimwear, linen, sandals |
+| **Autumn** | Warm tones, layering | Flannel, boots, scarves, earth tones |
 
 ```svelte
+<!-- src/lib/server/agents/orchestrator.ts -->
 <script>
   import { seasonStore } from '@autumnsgrove/groveengine/ui/stores';
+  import { get } from 'svelte/store';
 
-  // Use current season for accent colors or seasonal messaging
-  const seasonalGreeting = $derived(
-    $seasonStore === 'winter' ? 'Cozy up with winter deals!' :
-    $seasonStore === 'spring' ? 'Fresh finds for spring!' :
-    $seasonStore === 'summer' ? 'Hot summer savings!' :
-    'Fall into great deals!'
-  );
+  // Inject season context into search queries
+  function buildSearchContext(userQuery: string): string {
+    const season = get(seasonStore);
+
+    const seasonalContext = {
+      winter: 'warm, cozy, layered, cashmere, wool, insulated',
+      spring: 'light layers, transitional, rain-ready, fresh colors',
+      summer: 'breathable, lightweight, shorts, swimwear, linen',
+      autumn: 'layering pieces, warm tones, flannel, boots, scarves'
+    };
+
+    return `${userQuery} (seasonal preference: ${seasonalContext[season]})`;
+  }
 </script>
+```
+
+**Server-Side Season Detection:**
+
+Since seasonStore is client-side, we need server-side season awareness:
+
+```typescript
+// src/lib/server/utils/season.ts
+export function getCurrentSeason(): 'spring' | 'summer' | 'autumn' | 'winter' {
+  const month = new Date().getMonth(); // 0-11
+  if (month >= 2 && month <= 4) return 'spring';   // Mar-May
+  if (month >= 5 && month <= 7) return 'summer';   // Jun-Aug
+  if (month >= 8 && month <= 10) return 'autumn';  // Sep-Nov
+  return 'winter';                                  // Dec-Feb
+}
+
+// Allow user override (stored in profile preferences)
+export function getEffectiveSeason(userPreference?: string): Season {
+  if (userPreference && ['spring', 'summer', 'autumn', 'winter'].includes(userPreference)) {
+    return userPreference as Season;
+  }
+  return getCurrentSeason();
+}
+```
+
+**UI: Season Selector in Search Form:**
+
+```svelte
+<!-- src/routes/search/new/+page.svelte -->
+<script>
+  import { seasonStore } from '@autumnsgrove/groveengine/ui/stores';
+  import { Snowflake, Flower2, Sun, Leaf } from 'lucide-svelte';
+
+  const seasons = [
+    { value: 'winter', label: 'Winter', icon: Snowflake, hint: 'Cozy & warm' },
+    { value: 'spring', label: 'Spring', icon: Flower2, hint: 'Fresh & light' },
+    { value: 'summer', label: 'Summer', icon: Sun, hint: 'Cool & breezy' },
+    { value: 'autumn', label: 'Autumn', icon: Leaf, hint: 'Layered & warm' },
+  ];
+</script>
+
+<fieldset class="flex gap-2">
+  <legend class="text-sm font-medium mb-2">Shopping for:</legend>
+  {#each seasons as { value, label, icon: Icon, hint }}
+    <button
+      type="button"
+      class="flex flex-col items-center p-3 rounded-grove border transition-all"
+      class:border-grove-500={$seasonStore === value}
+      class:bg-grove-50={$seasonStore === value}
+      onclick={() => seasonStore.set(value)}
+    >
+      <Icon class="w-5 h-5" />
+      <span class="text-sm font-medium">{label}</span>
+      <span class="text-xs text-muted">{hint}</span>
+    </button>
+  {/each}
+</fieldset>
 ```
 
 ---
@@ -351,15 +525,29 @@ Scout can optionally participate in Grove's seasonal theming:
 - [ ] Replace `+layout.svelte` header section with `<Header>`
 - [ ] Replace `+layout.svelte` footer section with `<Footer>`
 - [ ] Create `ScoutUserMenu.svelte` for authenticated user dropdown
-- [ ] Create `ScoutLogo.svelte` if custom branding needed
+- [ ] Create `ScoutLogo.svelte` with ShoppingBasket icon
 - [ ] Configure `navItems` for Scout-specific navigation
 - [ ] Configure footer link sections
+
+#### Seasonal Search Integration (High Priority)
+- [ ] Create `src/lib/server/utils/season.ts` for server-side season detection
+- [ ] Add seasonal context injection to orchestrator agent
+- [ ] Add season selector UI to search form
+- [ ] Store user's season preference in profile
+- [ ] Display current season context on results page
+
+#### GlassCarousel Results (High Priority)
+- [ ] Replace grid/list results with `GlassCarousel`
+- [ ] Create product card snippet for carousel items
+- [ ] Add rank badges to carousel items
+- [ ] Implement swipe gestures for mobile
+- [ ] Add feedback buttons (thumbs up/down) to carousel cards
 
 #### Cards & Containers
 - [ ] Migrate `ProductCard.svelte` to use `GlassCard`
 - [ ] Migrate `SearchCard.svelte` to use `GlassCard`
-- [ ] Migrate `PlanCard.svelte` to use `GlassCard`
 - [ ] Update dashboard cards to glass variants
+- [ ] ~~Migrate `PlanCard.svelte`~~ (Deferred - pricing graft coming)
 
 #### Forms & Inputs
 - [ ] Update input styles to `grove-input` classes
@@ -396,18 +584,21 @@ Scout can optionally participate in Grove's seasonal theming:
 | `tailwind.config.js` | Import engine preset, add content paths |
 | `src/app.css` | Import engine styles, reduce custom CSS |
 | `src/routes/+layout.svelte` | Major rewrite using chrome components |
+| `src/routes/search/[id]/+page.svelte` | Use GlassCarousel for results |
+| `src/routes/search/new/+page.svelte` | Add season selector UI |
+| `src/lib/server/agents/orchestrator.ts` | Inject seasonal context |
 | `src/lib/components/scout/ProductCard.svelte` | Use GlassCard |
 | `src/lib/components/scout/SearchCard.svelte` | Use GlassCard |
-| `src/lib/components/scout/PlanCard.svelte` | Use GlassCard |
-| All page files | Update class names where needed |
 
 ### Files to Create
 
 | File | Purpose |
 |------|---------|
 | `src/lib/components/chrome/ScoutUserMenu.svelte` | User dropdown menu |
-| `src/lib/components/chrome/ScoutLogo.svelte` | Scout branding (optional) |
+| `src/lib/components/chrome/ScoutLogo.svelte` | ShoppingBasket branding |
 | `src/lib/components/chrome/index.ts` | Chrome exports |
+| `src/lib/server/utils/season.ts` | Server-side season detection |
+| `src/lib/components/scout/SeasonSelector.svelte` | Season picker for search form |
 
 ### Files to Remove/Deprecate
 
@@ -415,6 +606,13 @@ Scout can optionally participate in Grove's seasonal theming:
 |------|--------|
 | `src/lib/components/ThemeToggle.svelte` | Use engine's ThemeToggle |
 | Most of `src/app.css` component section | Use engine's grove.css |
+
+### Files Deferred (Pricing Graft)
+
+| File | Reason |
+|------|--------|
+| `src/routes/pricing/+page.svelte` | Will use future Pricing graft from engine |
+| `src/lib/components/scout/PlanCard.svelte` | Part of pricing - deferred |
 
 ---
 
@@ -496,11 +694,41 @@ If issues arise post-deployment:
 
 ## Implementation Order
 
-1. **Phase 1**: Update dependencies and Tailwind config (1 commit)
+1. **Phase 1**: Update dependencies and Tailwind config
 2. **Phase 2**: Migrate Footer (low risk, validates approach)
-3. **Phase 3**: Migrate Header (higher complexity)
-4. **Phase 4**: Migrate cards to Glass variants
-5. **Phase 5**: Clean up deprecated CSS
+3. **Phase 3**: Migrate Header with ScoutLogo (ShoppingBasket icon)
+4. **Phase 4a**: Implement GlassCarousel for curated results (high impact)
+5. **Phase 4b**: Add seasonal search context integration
+6. **Phase 5**: Migrate remaining cards to Glass variants
+7. **Phase 6**: Clean up deprecated CSS
+8. ~~**Phase 7**: Pricing page~~ (Deferred - awaiting graft)
+
+---
+
+## Future Considerations
+
+### Pricing Graft Integration
+
+When the Pricing graft is available from GroveEngine:
+
+```svelte
+<!-- Future implementation -->
+<script>
+  import { PricingPage } from '@autumnsgrove/groveengine/grafts/pricing';
+</script>
+
+<PricingPage
+  plans={scoutPlans}
+  features={scoutFeatures}
+  ctaText="Start Scouting"
+/>
+```
+
+The graft will provide:
+- Consistent pricing card layout across Grove products
+- Feature comparison tables
+- Billing period toggles
+- Mobile-responsive design
 
 ---
 
