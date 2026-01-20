@@ -3,6 +3,21 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { Icons, SearchInput, CreditBalance } from '$lib/components/scout';
+	// Season constants - define locally since groveengine types not fully exported
+	type RegularSeason = 'spring' | 'summer' | 'autumn' | 'winter';
+	const REGULAR_SEASONS: readonly RegularSeason[] = ['spring', 'summer', 'autumn', 'winter'];
+	const SEASON_LABELS: Record<RegularSeason, string> = {
+		spring: 'Spring',
+		summer: 'Summer',
+		autumn: 'Autumn',
+		winter: 'Winter'
+	};
+	const SEASON_ICONS: Record<RegularSeason, string> = {
+		spring: '🌸',
+		summer: '☀️',
+		autumn: '🍂',
+		winter: '❄️'
+	};
 
 	let { data } = $props();
 
@@ -11,6 +26,7 @@
 	let error = $state<string | null>(null);
 	let advanced = $state(false);
 	let searchProvider = $state<'brave' | 'tavily'>('brave');
+	let selectedSeason = $state<RegularSeason | null>(null);
 
 	// Check for pre-filled query from URL
 	onMount(() => {
@@ -40,7 +56,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					query: value.trim(),
-					searchProvider
+					searchProvider,
+					season: selectedSeason
 				})
 			});
 
@@ -145,6 +162,31 @@
 					{searchProvider === 'brave'
 						? 'Brave Search with comprehensive image search'
 						: 'Tavily AI-optimized search for better product extraction'}
+				</p>
+			</div>
+
+			<!-- Season Context Selector -->
+			<div class="mt-4 pt-4 border-t border-cream-300 dark:border-bark-600">
+				<label class="block text-sm font-medium text-bark-600 dark:text-cream-400 mb-2">
+					Season Context <span class="text-bark-400 dark:text-cream-500 font-normal">(optional)</span>
+				</label>
+				<div class="flex flex-wrap gap-2">
+					{#each REGULAR_SEASONS as season}
+						<button
+							type="button"
+							onclick={() => selectedSeason = selectedSeason === season ? null : season}
+							class="px-3 py-1.5 rounded-full text-sm transition-all flex items-center gap-1.5
+								{selectedSeason === season
+									? 'bg-grove-500 text-white shadow-sm'
+									: 'bg-cream-200 dark:bg-bark-700 text-bark-600 dark:text-cream-400 hover:bg-cream-300 dark:hover:bg-bark-600'}"
+						>
+							<span>{SEASON_ICONS[season]}</span>
+							<span>{SEASON_LABELS[season]}</span>
+						</button>
+					{/each}
+				</div>
+				<p class="text-xs text-bark-400 dark:text-cream-500 mt-1">
+					Help Scout find seasonally-appropriate products
 				</p>
 			</div>
 

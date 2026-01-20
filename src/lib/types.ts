@@ -173,6 +173,8 @@ export interface OAuthState {
 // Queue Types
 // ============================================================================
 
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+
 export interface SearchJob {
 	search_id: string;
 	user_id: string;
@@ -180,6 +182,7 @@ export interface SearchJob {
 	query_structured: ParsedQuery | null;
 	profile: ProfileContext;
 	searchProvider?: 'brave' | 'tavily';
+	season?: Season | null;
 }
 
 export interface ProfileContext {
@@ -245,7 +248,8 @@ export const SearchInputSchema = z.object({
 			exclude_brands: z.array(z.string()).optional()
 		})
 		.optional(),
-	searchProvider: z.enum(['brave', 'tavily']).optional().default('brave')
+	searchProvider: z.enum(['brave', 'tavily']).optional().default('brave'),
+	season: z.enum(['spring', 'summer', 'autumn', 'winter']).nullable().optional()
 });
 
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;

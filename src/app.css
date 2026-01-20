@@ -215,16 +215,6 @@
 		@apply bg-cream-200 dark:bg-bark-700 animate-pulse rounded-grove;
 	}
 
-	/* Navigation */
-	.scout-nav-link {
-		@apply px-3 py-2 text-sm font-medium text-bark-600 dark:text-cream-400
-			   hover:text-grove-600 dark:hover:text-grove-400 transition-colors duration-grove;
-	}
-
-	.scout-nav-link-active {
-		@apply text-grove-600 dark:text-grove-400;
-	}
-
 	/* Hero section */
 	.scout-hero {
 		@apply relative overflow-hidden bg-gradient-to-br from-cream via-cream-100 to-grove-50
