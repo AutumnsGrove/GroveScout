@@ -144,12 +144,49 @@ grep -r "scout-" src/ --include="*.svelte" --include="*.css" | sort -u
 # Compare with grove.css coverage
 ```
 
-#### 0.5 Exit Criteria for Phase 0
+#### 0.5 ⚠️ CRITICAL: Test Seasonal Query Injection
 
-- [ ] All import paths verified against actual package exports
-- [ ] GlassCarousel snippet API confirmed working
+**This must be tested before implementation.** The planned query enrichment:
+```typescript
+`${query} (seasonal preference: warm, cozy, layered)`
+```
+
+**May not work correctly with your search backend.** Different search APIs handle appended text differently:
+- Some treat parenthetical text as literal search terms
+- Some have token limits that truncate extra keywords
+- Some have structured filter APIs that work better
+
+**Before proceeding:**
+```bash
+# Test manually with your search backend
+curl "https://api.search.brave.com/res/v1/web/search?q=cozy+sweater+(seasonal+preference:+warm,+cozy)"
+```
+
+**If results are poor, use the backend's filter/facet API instead:**
+```typescript
+// Alternative: Use structured filters instead of query modification
+const searchParams = {
+  query: userQuery,
+  filters: {
+    category: getSeasonalCategories(season),
+    tags: SEASONAL_CONTEXTS[season].keywords
+  }
+};
+```
+
+#### 0.6 Exit Criteria for Phase 0
+
+**Must complete ALL before proceeding to Phase 1:**
+
+- [ ] All import paths verified against actual package exports ✅
+- [ ] GlassCarousel snippet API confirmed working ✅
 - [ ] No breaking changes between 0.6.1 → 0.9.80 identified
 - [ ] CSS class mapping document created (Scout → Grove)
+- [ ] **Seasonal query injection tested with real search backend**
+- [ ] Create spike branch with minimal chrome component integration
+- [ ] Verify SSR compatibility (Cloudflare Workers environment)
+- [ ] Test Glass components don't require browser-only APIs
+- [ ] Confirm no `unsafe-inline` CSP required for Glass styles
 
 ---
 
@@ -397,9 +434,6 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
   }
 
   let { data }: Props = $props();
-
-  // Helper to get product by index (GlassCarousel passes index to snippet)
-  const getProduct = (index: number) => data.curatedItems[index];
 </script>
 
 <section class="py-8">
@@ -414,14 +448,14 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
     autoplay={false}
   >
     {#snippet item(index)}
-      {@const product = getProduct(index)}
+      {@const product = data.curatedItems[index]}
       <GlassCard class="w-full h-full overflow-hidden">
         <!-- Product Image -->
         <div class="aspect-square bg-surface-subtle relative">
-          {#if product.imageUrl}
+          {#if product.image_url}
             <img
-              src={product.imageUrl}
-              alt={product.title}
+              src={product.image_url}
+              alt={product.name}
               class="w-full h-full object-cover"
               loading="lazy"
             />
@@ -439,18 +473,18 @@ The star of the show - Scout's 5 curated results displayed in a beautiful glass 
 
         <!-- Product Info -->
         <div class="p-4 space-y-3">
-          <h3 class="font-medium line-clamp-2">{product.title}</h3>
+          <h3 class="font-medium line-clamp-2">{product.name}</h3>
 
           <div class="flex items-center justify-between">
             <span class="text-lg font-semibold text-grove-600">
-              ${product.price}
+              ${product.price_current}
             </span>
             <span class="text-sm text-muted">{product.retailer}</span>
           </div>
 
-          <!-- Match reason -->
+          <!-- Match reason (AI-generated, auto-escaped by Svelte) -->
           <p class="text-sm text-muted italic">
-            "{product.matchReason}"
+            "{product.match_reason}"
           </p>
 
           <!-- Actions -->
@@ -496,15 +530,34 @@ Add type definitions for core domain types used throughout the migration:
 // src/lib/types/index.ts
 
 /** Represents a curated product result from Scout search */
+/**
+ * Product type matching actual API response (snake_case from backend)
+ * See: src/routes/search/[id]/+page.svelte for current usage
+ */
 export interface Product {
   id: string;
-  title: string;
-  price: number;
+  name: string;              // Product name (not "title")
+  price_current: number;     // Current price (snake_case from API)
+  price_original?: number;   // Original price before discount
   retailer: string;
   url: string;
-  imageUrl?: string;
-  matchReason: string;
-  rank: number;
+  image_url?: string;        // Snake_case from API
+  match_score: number;       // AI match confidence (0-100)
+  match_reason: string;      // AI explanation for recommendation
+}
+
+/**
+ * Optional: Create a display-friendly version for components
+ * This transforms API response to component props
+ */
+export function toDisplayProduct(p: Product, index: number) {
+  return {
+    ...p,
+    rank: index + 1,
+    imageUrl: p.image_url,
+    matchReason: p.match_reason,
+    price: p.price_current,
+  };
 }
 
 /** Grove seasonal context for search personalization */
@@ -589,17 +642,31 @@ const LEGACY_THEME_KEY = 'theme'; // Old Scout localStorage key
 
 export function migrateUserPreferences(): void {
   if (!browser) return;
-  if (localStorage.getItem(MIGRATION_KEY)) return; // Already migrated
 
-  // Migrate legacy theme preference
-  const legacyTheme = localStorage.getItem(LEGACY_THEME_KEY);
-  if (legacyTheme === 'dark' || legacyTheme === 'light') {
-    themeStore.set(legacyTheme);
-    localStorage.removeItem(LEGACY_THEME_KEY); // Clean up old key
+  try {
+    // Check if already migrated
+    if (localStorage.getItem(MIGRATION_KEY)) return;
+
+    // Migrate legacy theme preference
+    const legacyTheme = localStorage.getItem(LEGACY_THEME_KEY);
+    if (legacyTheme === 'dark' || legacyTheme === 'light') {
+      try {
+        themeStore.set(legacyTheme);
+        localStorage.removeItem(LEGACY_THEME_KEY); // Clean up old key
+      } catch (storeError) {
+        // Store might be locked or have different format
+        console.warn('[Scout] Failed to migrate theme to store:', storeError);
+        // Don't block migration - theme will use default
+      }
+    }
+
+    // Mark migration complete (even if theme migration failed)
+    localStorage.setItem(MIGRATION_KEY, new Date().toISOString());
+  } catch (error) {
+    // localStorage unavailable (private browsing, quota exceeded, etc.)
+    // Gracefully degrade - user will get default preferences
+    console.warn('[Scout] Preference migration skipped:', error);
   }
-
-  // Mark migration complete
-  localStorage.setItem(MIGRATION_KEY, new Date().toISOString());
 }
 ```
 
@@ -878,6 +945,14 @@ export const POST: RequestHandler = async ({ request }) => {
 - [ ] Test app install flow (Add to Home Screen)
 - [ ] Validate manifest.json icons are correct
 
+#### Documentation Updates (Post-Migration)
+- [ ] Update `README.md` with new GroveEngine dependency requirement
+- [ ] Document seasonal search feature in user-facing docs
+- [ ] Update component import examples in developer docs
+- [ ] Add troubleshooting guide for common migration issues
+- [ ] Update AGENT.md if any agent workflows changed
+- [ ] Create migration notes for future reference
+
 #### Seasonal Search Integration (High Priority)
 - [ ] Add season selector UI to search form (uses `seasonStore` from GroveEngine)
 - [ ] Pass season as parameter in search API request (`POST /api/search`)
@@ -1093,6 +1168,17 @@ describe('migrateUserPreferences', () => {
     expect(() => migrateUserPreferences()).not.toThrow();
   });
 
+  it('handles themeStore.set errors gracefully', () => {
+    // Mock themeStore.set to throw (store might be locked or have different format)
+    vi.spyOn(themeStore, 'set').mockImplementation(() => {
+      throw new Error('Store locked');
+    });
+    localStorage.setItem('theme', 'dark');
+    expect(() => migrateUserPreferences()).not.toThrow();
+    // Migration should still mark as complete
+    expect(localStorage.getItem('scout_prefs_migrated_v1')).toBeTruthy();
+  });
+
   it('only runs migration once', () => {
     localStorage.setItem('theme', 'dark');
     migrateUserPreferences();
@@ -1112,10 +1198,13 @@ describe('migrateUserPreferences', () => {
 - [ ] Test CSP doesn't block GlassCarousel animations
 
 ### XSS Prevention
-- [ ] Sanitize `product.matchReason` before rendering (user-influenced content)
-- [ ] Sanitize `product.title` and `product.retailer` from external APIs
-- [ ] Use `{@html}` sparingly and only with sanitized content
-- [ ] Review all `target="_blank"` links have `rel="noopener"`
+- [x] `product.match_reason` - Auto-escaped by Svelte ✅ (AI-generated from Claude API)
+- [x] `product.name` and `product.retailer` - Auto-escaped by Svelte ✅
+- [ ] Verify `match_reason` only comes from trusted Claude API responses
+- [ ] Use `{@html}` sparingly and only with sanitized content (none currently)
+- [x] All `target="_blank"` links have `rel="noopener"` ✅
+
+> **Note:** Svelte automatically escapes all `{variable}` interpolations. XSS is only possible with `{@html}` which we don't use for user/external content.
 
 ### Input Validation
 - [ ] Zod validates all API inputs (already implemented ✅)
@@ -1131,12 +1220,45 @@ describe('migrateUserPreferences', () => {
 
 ## Rollback Plan
 
-If issues arise post-deployment:
+### Pre-Migration Safety
+```bash
+# Create checkpoint before starting migration
+git tag pre-migration-checkpoint
+npm run build && npm run test  # Verify baseline works
+```
+
+### If Issues Arise Post-Deployment
 
 1. **Immediate**: Revert to previous commit
 2. **Package**: Pin groveengine to working version
 3. **Config**: Toggle feature flag to legacy mode
 4. **Assets**: Old CSS is still in git history
+
+### Rollback Procedure
+```bash
+# Full rollback to pre-migration state
+git reset --hard pre-migration-checkpoint
+npm install  # Restore old groveengine version
+npm run build && npm run test  # Verify rollback works
+npm run deploy  # Deploy rolled-back version
+```
+
+### Test Rollback Before You Need It
+```bash
+# After Phase 1, practice the rollback procedure:
+git stash  # Save current work
+git checkout pre-migration-checkpoint
+npm install && npm run build && npm run test
+# Verify app works at checkpoint
+git checkout -  # Return to migration branch
+git stash pop  # Restore work
+```
+
+### Partial Rollback (Single Feature)
+If only one feature is problematic:
+1. Use feature flags to disable specific components
+2. Keep the rest of the migration in place
+3. Fix the issue, then re-enable
 
 ---
 
@@ -1150,22 +1272,32 @@ If issues arise post-deployment:
 
 ### Performance Budgets
 
+**Goal:** This migration should *reduce* bundle size by using shared components, not increase it.
+
 Measure before and after migration:
 
-| Metric | Budget | How to Measure |
-|--------|--------|----------------|
-| **Bundle Size** | ≤ +5% increase | `npm run build && du -sh .svelte-kit/cloudflare` |
-| **Lighthouse Performance** | ≥ 90 | Chrome DevTools → Lighthouse |
-| **Lighthouse Accessibility** | ≥ 95 | Chrome DevTools → Lighthouse |
-| **First Contentful Paint** | ≤ 1.5s | Lighthouse or WebPageTest |
-| **Time to Interactive** | ≤ 3.0s | Lighthouse |
-| **Cumulative Layout Shift** | ≤ 0.1 | Lighthouse |
+| Metric | Budget | Rationale |
+|--------|--------|-----------|
+| **Bundle Size** | ≤ 0% increase (target -10%) | Shared components = less code. Any increase needs investigation. |
+| **CSS Size** | -50% or better | Replacing ~280 lines custom CSS with shared styles |
+| **Lighthouse Performance** | ≥ 90 | No regression allowed |
+| **Lighthouse Accessibility** | ≥ 95 | Should improve with better ARIA |
+| **First Contentful Paint** | ≤ 1.5s | Font preconnect should help |
+| **Time to Interactive** | ≤ 3.0s | Glass animations must not block |
+| **Cumulative Layout Shift** | ≤ 0.1 | Chrome layout must be stable |
+
+**⚠️ If bundle size increases:**
+1. Check tree-shaking is working (`npm run build -- --analyze`)
+2. Verify you're not importing entire groveengine package
+3. Review for duplicate dependencies
+4. Consider lazy-loading Glass components
 
 **Pre-migration baseline command:**
 ```bash
 # Record baseline metrics before starting
 npm run build
 echo "Bundle size: $(du -sh .svelte-kit/cloudflare)"
+echo "CSS size: $(wc -c < src/app.css)"
 # Run Lighthouse audit and save report
 ```
 
