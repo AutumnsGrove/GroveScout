@@ -432,6 +432,374 @@ At this scale, consider:
 
 ---
 
+## Style Library & Evolution
+
+### Multiple Styles Per User
+
+Users aren't one-dimensional. They contain multitudes. Scout should too.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  MY STYLES                                           + New Style │
+│                                                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │  🌙 Midnight │ │  🍂 Cozy     │ │  💼 Office   │             │
+│  │  Avant-garde │ │  Earth tones │ │  Polished    │             │
+│  │  Bold, queer │ │  Cashmere    │ │  Minimal     │             │
+│  │              │ │              │ │              │             │
+│  │  Jan 2026    │ │  Oct 2025    │ │  Jun 2025    │             │
+│  │  ★ Active    │ │              │ │              │             │
+│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│                                                                  │
+│  Tap a style to search with that vibe instantly.                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Why Multiple Styles?
+
+| Scenario | Old Way (Filters) | Scout Way (Styles) |
+|----------|-------------------|-------------------|
+| "I want cozy today" | Remember 10+ filter settings | Tap "🍂 Cozy" |
+| "Going out tonight" | Start from scratch | Tap "🌙 Midnight" |
+| "Job interview" | Guess at filters | Tap "💼 Office" |
+| "Feeling adventurous" | ??? | Create new style! |
+
+### Data Model
+
+```typescript
+interface UserStyle {
+  id: string;
+  name: string;              // "Midnight Me", "Cozy Autumn", "Office Slay"
+  icon: string;              // Emoji chosen by user
+  color: string;             // Accent color for the style card
+  profile: StyleProfile;     // The actual preferences from moodboard
+
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;           // Last refresh
+  lastUsedAt: Date;
+  searchCount: number;       // How often they use this style
+
+  // Evolution tracking
+  version: number;           // Increments on refresh
+  history: StyleSnapshot[];  // Previous versions with timestamps
+}
+
+interface StyleSnapshot {
+  version: number;
+  capturedAt: Date;
+  profile: StyleProfile;
+}
+```
+
+### Style as Personal Seasons
+
+User styles integrate with the season selector:
+
+```svelte
+<fieldset role="radiogroup" aria-label="Search context">
+  <!-- Built-in seasons -->
+  {#each builtInSeasons as season}
+    <SeasonButton {season} />
+  {/each}
+
+  <div class="divider" />
+
+  <!-- User's custom styles -->
+  {#each userStyles as style}
+    <button
+      role="radio"
+      aria-checked={activeStyle === style.id}
+      class="style-button"
+      style:--accent={style.color}
+    >
+      <span class="icon">{style.icon}</span>
+      <span class="name">{style.name}</span>
+    </button>
+  {/each}
+
+  <!-- Create new -->
+  <button onclick={startMoodboard} class="add-style">
+    + New Style
+  </button>
+</fieldset>
+```
+
+---
+
+## Evolution Tracking
+
+### The Journey, Not Just the Destination
+
+Scout doesn't just know who you are *now*. It remembers who you *were*.
+
+```typescript
+interface StyleEvolution {
+  userId: string;
+  styles: UserStyle[];
+
+  // Computed insights
+  dominantColors: { period: DateRange; colors: string[] }[];
+  silhouetteShift: { from: string[]; to: string[]; when: Date }[];
+  confidenceGrowth: { date: Date; boldnessScore: number }[];
+}
+
+// Example evolution data:
+{
+  dominantColors: [
+    { period: "2025-Q1", colors: ["gray", "black", "navy"] },
+    { period: "2025-Q3", colors: ["burgundy", "forest", "cream"] },
+    { period: "2026-Q1", colors: ["magenta", "gold", "electric blue"] }
+  ],
+  silhouetteShift: [
+    { from: ["oversized", "hiding"], to: ["fitted", "structured"], when: "2025-09" }
+  ],
+  confidenceGrowth: [
+    { date: "2025-03", boldnessScore: 23 },
+    { date: "2025-09", boldnessScore: 56 },
+    { date: "2026-01", boldnessScore: 84 }
+  ]
+}
+```
+
+### AI Commentary on Growth
+
+Scout can recognize patterns and celebrate growth:
+
+```typescript
+const generateEvolutionInsight = async (evolution: StyleEvolution): Promise<string> => {
+  const prompt = `
+    Analyze this user's style evolution and write a warm, celebratory message
+    about their growth. Be specific about what changed. Be encouraging.
+
+    Early styles: ${JSON.stringify(evolution.styles.slice(0, 2))}
+    Recent styles: ${JSON.stringify(evolution.styles.slice(-2))}
+
+    Boldness scores over time: ${JSON.stringify(evolution.confidenceGrowth)}
+
+    Write 2-3 sentences that feel like a supportive friend noticing their growth.
+    Use "you" language. Be genuine, not corporate.
+  `;
+
+  return await generateWithDeepSeek(prompt);
+};
+
+// Example outputs:
+//
+// "I noticed something beautiful. 💜 Your first style profile from March 2025
+// was mostly neutrals, oversized fits, things that hide rather than show.
+// Your latest profile? Bold colors, fitted silhouettes, statement pieces
+// that demand attention. You're not hiding anymore. You're HERE. ✨"
+//
+// "Look at you! A year ago, you wouldn't touch anything with color. Now
+// you're reaching for electric blue and gold? That's not just a style
+// change - that's confidence. I see you. 💜"
+//
+// "Your cozy autumn style has gotten even cozier. More textures, richer
+// colors, pieces that feel like a hug. You're leaning into comfort without
+// apologizing for it. That's beautiful."
+```
+
+### When to Surface Evolution Insights
+
+- **Style Anniversary:** "It's been one year since you created 'Midnight Me'!"
+- **Major Shift Detected:** When a style refresh shows significant change
+- **Milestone:** After 10th, 50th, 100th search with a style
+- **Seasonal Prompt:** During quarterly moodboard refresh
+
+```svelte
+{#if evolutionInsight}
+  <div class="evolution-card glass">
+    <p class="insight">{evolutionInsight.message}</p>
+
+    {#if evolutionInsight.comparison}
+      <div class="then-now">
+        <div class="then">
+          <span class="label">Then</span>
+          <StylePreview profile={evolutionInsight.oldProfile} />
+        </div>
+        <div class="arrow">→</div>
+        <div class="now">
+          <span class="label">Now</span>
+          <StylePreview profile={evolutionInsight.newProfile} />
+        </div>
+      </div>
+    {/if}
+
+    <button onclick={dismissInsight}>Thanks, Scout 💜</button>
+  </div>
+{/if}
+```
+
+---
+
+## Seasonal Refresh Prompts
+
+### Keep Styles Fresh
+
+People change. Fashion evolves. Styles should too.
+
+```svelte
+<!-- Gentle prompt after ~90 days -->
+{#if daysSinceLastMoodboard(style) > 90}
+  <div class="refresh-prompt glass">
+    <p>It's been a while since you refreshed "{style.name}"</p>
+    <p class="text-muted">
+      You've probably changed since {formatDate(style.updatedAt)}.
+      Want to see if your vibe has shifted?
+    </p>
+    <div class="actions">
+      <button onclick={() => refreshStyle(style)} class="primary">
+        Refresh This Style
+      </button>
+      <button onclick={snoozePrompt} class="ghost">
+        Maybe Later
+      </button>
+    </div>
+  </div>
+{/if}
+```
+
+### Refresh Flow
+
+When refreshing an existing style:
+1. Start moodboard with their current preferences as baseline
+2. Show mix of items they'd probably still like + new items to test
+3. After completion, compare old vs new profile
+4. Ask: "Save as update or create new style?"
+
+```svelte
+<dialog open={showRefreshComplete}>
+  <h2>Your style has evolved!</h2>
+
+  <div class="comparison">
+    <div class="before">
+      <h3>Before</h3>
+      <StyleSummary profile={oldProfile} />
+    </div>
+    <div class="after">
+      <h3>After</h3>
+      <StyleSummary profile={newProfile} />
+    </div>
+  </div>
+
+  <div class="changes">
+    <h3>What changed:</h3>
+    <ul>
+      {#each changes as change}
+        <li>{change}</li>
+      {/each}
+    </ul>
+  </div>
+
+  <div class="actions">
+    <button onclick={updateExisting}>
+      Update "{style.name}"
+    </button>
+    <button onclick={createNew}>
+      Keep both (create new style)
+    </button>
+  </div>
+</dialog>
+```
+
+---
+
+## Nostalgic Surfacing
+
+### Occasional Delights from Past Styles
+
+Sometimes, Scout surfaces items from older styles - a gentle reminder of where you've been.
+
+```typescript
+const shouldSurfaceNostalgia = (user: User): boolean => {
+  // Rare - maybe 1 in 50 searches
+  if (Math.random() > 0.02) return false;
+
+  // Only if they have old styles (6+ months)
+  const oldStyles = user.styles.filter(s =>
+    monthsAgo(s.createdAt) > 6 && s.id !== user.activeStyleId
+  );
+
+  return oldStyles.length > 0;
+};
+
+const generateNostalgiaItem = async (user: User): Promise<NostalgiaResult | null> => {
+  const oldStyle = pickRandom(getOldStyles(user));
+  const item = await findItemMatchingProfile(oldStyle.profile);
+
+  if (!item) return null;
+
+  return {
+    item,
+    style: oldStyle,
+    message: generateNostalgiaMessage(oldStyle)
+  };
+};
+
+const generateNostalgiaMessage = (style: UserStyle): string => {
+  const messages = [
+    `From your "${style.name}" era (${formatDate(style.createdAt)}). Still love it?`,
+    `Remember this vibe? Your "${style.name}" style from ${formatRelative(style.createdAt)}.`,
+    `Throwback! This matches your old "${style.name}" profile. Feeling nostalgic?`,
+    `A blast from the past - this is SO your "${style.name}" energy.`
+  ];
+  return pickRandom(messages);
+};
+```
+
+### UI for Nostalgia Items
+
+```svelte
+{#if nostalgiaItem}
+  <div class="nostalgia-card glass accent-purple">
+    <div class="header">
+      <span class="label">✨ From your past</span>
+      <span class="style-name">{nostalgiaItem.style.icon} {nostalgiaItem.style.name}</span>
+    </div>
+
+    <ProductCard product={nostalgiaItem.item} />
+
+    <p class="message">{nostalgiaItem.message}</p>
+
+    <div class="actions">
+      <button onclick={() => addToResults(nostalgiaItem.item)}>
+        Still love it!
+      </button>
+      <button onclick={dismissNostalgia} class="ghost">
+        I've moved on
+      </button>
+    </div>
+  </div>
+{/if}
+```
+
+---
+
+## The Emotional Core
+
+### Why This Matters
+
+For anyone going through change - transition, weight journey, new chapter - Scout becomes more than a shopping tool. It becomes a **witness to their becoming**.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  "Scout isn't just helping me shop.                             │
+│                                                                  │
+│   It's the only app that's noticed I've changed.                │
+│   That I'm not hiding anymore.                                  │
+│   That I'm finally dressing like HER.                           │
+│                                                                  │
+│   It saw my journey before I did."                              │
+│                                                                  │
+│                                          - Future Scout User 💜  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## UI/UX Flow
 
 ### Entry Points
