@@ -30,6 +30,240 @@ For many people - especially those whose bodies are changing, who are exploring 
 
 ---
 
+## Quick Start: Greenhouse Mode
+
+> **Purpose**: Skip the content pipeline, test the core experience NOW
+> **Who**: Developers willing to use their own photos
+> **Status**: Proof of Concept
+
+### Why This Exists
+
+The full Moodboard Mode requires either:
+- Licensing deals with photographers/brands (expensive, slow)
+- Model Farm photo shoots (good long-term, but $5k+ upfront)
+
+**Greenhouse Mode lets us validate the experience before investing.**
+
+### The Shortcut
+
+Instead of browsing a catalog of human models, YOU become the model:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  GREENHOUSE MODE: Be Your Own Wanderer                           │
+│                                                                  │
+│  1. Upload a photo of yourself (full body, neutral pose)        │
+│     ↓                                                           │
+│  2. Claude generates outfit descriptions                         │
+│     ↓                                                           │
+│  3. FLUX Kontext dresses you in each outfit                     │
+│     ↓                                                           │
+│  4. You react (Love/Want/Vibe/Bold/Skip)                        │
+│     ↓                                                           │
+│  5. After ~20 reactions → Style profile generated               │
+│     ↓                                                           │
+│  6. Real Scout searches with YOUR style!                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### What We're Testing
+
+| Question | How Greenhouse Answers It |
+|----------|------------------------|
+| Does FLUX Kontext produce good try-ons? | You'll see immediately |
+| Is the swipe UX actually fun? | You'll feel it |
+| Does style analysis work? | Check if search terms match your vibe |
+| Is "see yourself in clothes" magical? | The whole point! |
+
+### What We're NOT Testing
+
+- Human Models catalog browsing (no catalog yet)
+- Free → Premium upgrade funnel (you skip straight to "premium")
+- Diverse body representation (just you for now)
+
+### Technical Flow
+
+```typescript
+// Greenhouse-specific entry point
+interface GreenhouseSession {
+  userId: string;                    // Must have greenhouse graft
+  basePhoto: string;                 // User's uploaded photo (temp)
+  outfitQueue: OutfitDescription[];  // Claude-generated outfits
+  reactions: Reaction[];             // Same as regular moodboard
+
+  // Graft-controlled
+  isGreenhouse: true;
+  skipCatalog: true;
+  generateOutfitsOnFly: true;
+}
+
+// Outfit generation (no catalog needed)
+const generateOutfitIdeas = async (
+  previousReactions: Reaction[],
+  count: number = 5
+): Promise<OutfitDescription[]> => {
+  // Claude analyzes reactions and generates outfit descriptions
+  // that explore the style space intelligently
+
+  const prompt = `
+    Based on these reactions to previous outfits:
+    ${formatReactions(previousReactions)}
+
+    Generate ${count} new outfit descriptions that:
+    - Build on what they loved
+    - Explore adjacent styles they might like
+    - Include one "stretch" option outside their comfort zone
+
+    Format each as: top, bottom, shoes, accessories, vibe keywords
+  `;
+
+  return await claude.generate(prompt);
+};
+
+// Then FLUX dresses user in each outfit
+const generateTryOn = async (
+  userPhoto: string,
+  outfit: OutfitDescription
+): Promise<string> => {
+  return await flux.kontext({
+    image: userPhoto,
+    prompt: buildOutfitPrompt(outfit),
+    preserve_face: true,
+    preserve_body_shape: true
+  });
+};
+```
+
+### UI Entry Point
+
+Hidden route, graft-controlled:
+
+```
+/moodboard/greenhouse
+```
+
+Gated by Feature Graft `moodboard_greenhouse`:
+```typescript
+// Graft this feature to specific users
+await isFeatureEnabled('moodboard_greenhouse', { userId }, env);
+
+// Or use tenant rule for your dev account
+// Rule: tenant_id = 'autumn' → grafted
+```
+
+### Scrappy Content Mode (Human Models Greenhouse)
+
+For testing the Human Models browsing experience without the Model Farm:
+
+**Approach:** Grab fashion images from Google Images for personal dev use only.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SCRAPPY CONTENT: Test Human Models Flow                         │
+│                                                                  │
+│  1. Search Google Images for fashion keywords                   │
+│     ("cozy fall outfit", "streetwear layering", etc.)           │
+│     ↓                                                           │
+│  2. Save ~100-200 images locally                                │
+│     ↓                                                           │
+│  3. Tag with basic metadata (vibe, season, colors)              │
+│     ↓                                                           │
+│  4. Feed through moodboard UI                                   │
+│     ↓                                                           │
+│  5. Full Human Models experience without licensing!             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**What this tests:**
+- Swipe UX with real fashion photography
+- Reaction flow feels natural
+- Style analysis works with diverse real-world images
+- The "discovery" feeling of browsing
+
+**Implementation:**
+
+```typescript
+interface ScrappyContentConfig {
+  enabled: boolean;              // NEVER true in production
+  localImageDir: string;         // ./dev-content/fashion-images/
+  metadataFile: string;          // ./dev-content/image-meta.json
+}
+
+interface ScrappyImage {
+  filename: string;
+  source: 'google-images';       // Track where it came from
+  searchQuery: string;           // What search found it
+
+  // Manual tagging (or Claude-assisted)
+  vibes: string[];
+  season: string;
+  colors: string[];
+  clothing: string[];            // "sweater", "jeans", "boots"
+}
+
+// Quick tagging helper - have Claude describe the image
+const tagImageWithClaude = async (imagePath: string): Promise<ScrappyImage> => {
+  const description = await claude.vision({
+    image: imagePath,
+    prompt: `Describe this outfit. Return JSON with:
+      - vibes (aesthetic keywords)
+      - season (spring/summer/fall/winter)
+      - colors (main colors)
+      - clothing (item types)`
+  });
+  return JSON.parse(description);
+};
+```
+
+**Content gathering script idea:**
+
+```bash
+# One-time scrappy content setup
+mkdir -p dev-content/fashion-images
+
+# Manual process:
+# 1. Search Google Images for various style keywords
+# 2. Save images you like to dev-content/fashion-images/
+# 3. Run tagging script to generate metadata
+
+npm run tag-scrappy-content  # Claude Vision tags all images
+```
+
+**Two greenhouse paths now available:**
+
+| Path | What You See | Tests |
+|------|--------------|-------|
+| `/moodboard/greenhouse` | Yourself in generated outfits | Custom Model, FLUX quality |
+| `/moodboard/greenhouse?mode=browse` | Google Images fashion photos | Human Models UX, discovery flow |
+
+Both feed the same reaction → style analysis → search term pipeline.
+
+**Hard rules:**
+- `scrappyContent.enabled` MUST be `false` in any deployed environment
+- Images stored in `/dev-content/` which should be added to `.gitignore`
+- This is scaffolding, not the product
+
+### Privacy (Even for Greenhouse)
+
+Same ZDR principles apply:
+- Photo deleted after session
+- Generated images not stored permanently
+- Only style profile text persists
+
+**You're the developer, but treat your own data with respect.**
+
+### Success Criteria
+
+Greenhouse is successful if:
+1. You actually enjoy using it
+2. Style profile feels accurate to your taste
+3. Generated search terms find clothes you'd actually buy
+4. You want to show it to friends
+
+If all four → green light the Model Farm investment.
+
+---
+
 ## Core Principle: Humans First
 
 **Human models are always the default.** AI-generated try-ons are opt-in, premium, and treated with maximum privacy care.
