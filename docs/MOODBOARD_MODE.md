@@ -147,6 +147,98 @@ Gated by:
 - `user.email` in allowed dogfood list OR
 - Feature flag `ENABLE_DOGFOOD_MODE`
 
+### Scrappy Content Mode (Human Models Dogfood)
+
+For testing the Human Models browsing experience without the Model Farm:
+
+**Approach:** Grab fashion images from Google Images for personal dev use only.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SCRAPPY CONTENT: Test Human Models Flow                         │
+│                                                                  │
+│  1. Search Google Images for fashion keywords                   │
+│     ("cozy fall outfit", "streetwear layering", etc.)           │
+│     ↓                                                           │
+│  2. Save ~100-200 images locally                                │
+│     ↓                                                           │
+│  3. Tag with basic metadata (vibe, season, colors)              │
+│     ↓                                                           │
+│  4. Feed through moodboard UI                                   │
+│     ↓                                                           │
+│  5. Full Human Models experience without licensing!             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**What this tests:**
+- Swipe UX with real fashion photography
+- Reaction flow feels natural
+- Style analysis works with diverse real-world images
+- The "discovery" feeling of browsing
+
+**Implementation:**
+
+```typescript
+interface ScrappyContentConfig {
+  enabled: boolean;              // NEVER true in production
+  localImageDir: string;         // ./dev-content/fashion-images/
+  metadataFile: string;          // ./dev-content/image-meta.json
+}
+
+interface ScrappyImage {
+  filename: string;
+  source: 'google-images';       // Track where it came from
+  searchQuery: string;           // What search found it
+
+  // Manual tagging (or Claude-assisted)
+  vibes: string[];
+  season: string;
+  colors: string[];
+  clothing: string[];            // "sweater", "jeans", "boots"
+}
+
+// Quick tagging helper - have Claude describe the image
+const tagImageWithClaude = async (imagePath: string): Promise<ScrappyImage> => {
+  const description = await claude.vision({
+    image: imagePath,
+    prompt: `Describe this outfit. Return JSON with:
+      - vibes (aesthetic keywords)
+      - season (spring/summer/fall/winter)
+      - colors (main colors)
+      - clothing (item types)`
+  });
+  return JSON.parse(description);
+};
+```
+
+**Content gathering script idea:**
+
+```bash
+# One-time scrappy content setup
+mkdir -p dev-content/fashion-images
+
+# Manual process:
+# 1. Search Google Images for various style keywords
+# 2. Save images you like to dev-content/fashion-images/
+# 3. Run tagging script to generate metadata
+
+npm run tag-scrappy-content  # Claude Vision tags all images
+```
+
+**Two dogfood paths now available:**
+
+| Path | What You See | Tests |
+|------|--------------|-------|
+| `/moodboard/dogfood` | Yourself in generated outfits | Custom Model, FLUX quality |
+| `/moodboard/dogfood?mode=browse` | Google Images fashion photos | Human Models UX, discovery flow |
+
+Both feed the same reaction → style analysis → search term pipeline.
+
+**Hard rules:**
+- `scrappyContent.enabled` MUST be `false` in any deployed environment
+- Images stored in `/dev-content/` which is `.gitignore`d
+- This is scaffolding, not the product
+
 ### Privacy (Even for Dogfood)
 
 Same ZDR principles apply:
