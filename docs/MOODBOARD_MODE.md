@@ -30,7 +30,7 @@ For many people - especially those whose bodies are changing, who are exploring 
 
 ---
 
-## Quick Start: Developer Dogfood Mode
+## Quick Start: Greenhouse Mode
 
 > **Purpose**: Skip the content pipeline, test the core experience NOW
 > **Who**: Developers willing to use their own photos
@@ -42,7 +42,7 @@ The full Moodboard Mode requires either:
 - Licensing deals with photographers/brands (expensive, slow)
 - Model Farm photo shoots (good long-term, but $5k+ upfront)
 
-**Dogfood Mode lets us validate the experience before investing.**
+**Greenhouse Mode lets us validate the experience before investing.**
 
 ### The Shortcut
 
@@ -50,7 +50,7 @@ Instead of browsing a catalog of human models, YOU become the model:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  DOGFOOD MODE: Be Your Own Wanderer                              │
+│  GREENHOUSE MODE: Be Your Own Wanderer                           │
 │                                                                  │
 │  1. Upload a photo of yourself (full body, neutral pose)        │
 │     ↓                                                           │
@@ -68,7 +68,7 @@ Instead of browsing a catalog of human models, YOU become the model:
 
 ### What We're Testing
 
-| Question | How Dogfood Answers It |
+| Question | How Greenhouse Answers It |
 |----------|------------------------|
 | Does FLUX Kontext produce good try-ons? | You'll see immediately |
 | Is the swipe UX actually fun? | You'll feel it |
@@ -84,15 +84,15 @@ Instead of browsing a catalog of human models, YOU become the model:
 ### Technical Flow
 
 ```typescript
-// Dogfood-specific entry point
-interface DogfoodSession {
-  userId: string;                    // Must be admin/developer
+// Greenhouse-specific entry point
+interface GreenhouseSession {
+  userId: string;                    // Must have greenhouse graft
   basePhoto: string;                 // User's uploaded photo (temp)
   outfitQueue: OutfitDescription[];  // Claude-generated outfits
   reactions: Reaction[];             // Same as regular moodboard
 
-  // Feature flags
-  isDogfood: true;
+  // Graft-controlled
+  isGreenhouse: true;
   skipCatalog: true;
   generateOutfitsOnFly: true;
 }
@@ -136,18 +136,22 @@ const generateTryOn = async (
 
 ### UI Entry Point
 
-Hidden route for developers only:
+Hidden route, graft-controlled:
 
 ```
-/moodboard/dogfood
+/moodboard/greenhouse
 ```
 
-Gated by:
-- `user.role === 'admin'` OR
-- `user.email` in allowed dogfood list OR
-- Feature flag `ENABLE_DOGFOOD_MODE`
+Gated by Feature Graft `moodboard_greenhouse`:
+```typescript
+// Graft this feature to specific users
+await isFeatureEnabled('moodboard_greenhouse', { userId }, env);
 
-### Scrappy Content Mode (Human Models Dogfood)
+// Or use tenant rule for your dev account
+// Rule: tenant_id = 'autumn' → grafted
+```
+
+### Scrappy Content Mode (Human Models Greenhouse)
 
 For testing the Human Models browsing experience without the Model Farm:
 
@@ -225,12 +229,12 @@ mkdir -p dev-content/fashion-images
 npm run tag-scrappy-content  # Claude Vision tags all images
 ```
 
-**Two dogfood paths now available:**
+**Two greenhouse paths now available:**
 
 | Path | What You See | Tests |
 |------|--------------|-------|
-| `/moodboard/dogfood` | Yourself in generated outfits | Custom Model, FLUX quality |
-| `/moodboard/dogfood?mode=browse` | Google Images fashion photos | Human Models UX, discovery flow |
+| `/moodboard/greenhouse` | Yourself in generated outfits | Custom Model, FLUX quality |
+| `/moodboard/greenhouse?mode=browse` | Google Images fashion photos | Human Models UX, discovery flow |
 
 Both feed the same reaction → style analysis → search term pipeline.
 
@@ -239,7 +243,7 @@ Both feed the same reaction → style analysis → search term pipeline.
 - Images stored in `/dev-content/` which is `.gitignore`d
 - This is scaffolding, not the product
 
-### Privacy (Even for Dogfood)
+### Privacy (Even for Greenhouse)
 
 Same ZDR principles apply:
 - Photo deleted after session
@@ -250,7 +254,7 @@ Same ZDR principles apply:
 
 ### Success Criteria
 
-Dogfood is successful if:
+Greenhouse is successful if:
 1. You actually enjoy using it
 2. Style profile feels accurate to your taste
 3. Generated search terms find clothes you'd actually buy
