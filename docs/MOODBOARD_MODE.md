@@ -240,7 +240,7 @@ Both feed the same reaction → style analysis → search term pipeline.
 
 **Hard rules:**
 - `scrappyContent.enabled` MUST be `false` in any deployed environment
-- Images stored in `/dev-content/` which is `.gitignore`d
+- Images stored in `/dev-content/` which should be added to `.gitignore`
 - This is scaffolding, not the product
 
 ### Privacy (Even for Greenhouse)
