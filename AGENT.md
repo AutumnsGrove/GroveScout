@@ -62,8 +62,10 @@ Scout (internal codename: **Research Goblin**) is an async deal-finding research
 
 ### TODO Management
 - **Always check `TODOS.md` first** when starting a task or session
+- **Check `COMPLETED.md`** for context on past decisions and implementation details
 - **Update immediately** when tasks are completed, added, or changed
-- Keep the list current and manageable
+- **Move completed tasks** from `TODOS.md` to `COMPLETED.md` to keep the TODO list focused
+- Keep both lists current and accurate
 
 ### Git Workflow Essentials
 
@@ -74,10 +76,6 @@ Scout (internal codename: **Research Goblin**) is an async deal-finding research
 <type>: <brief description>
 
 <optional body>
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-Authored-By: [Model Name] <agent@localhost>
 ```
 
 **Common Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`
@@ -91,63 +89,127 @@ docs: Update README
 
 **For complete details:** See `AgentUsage/git_guide.md`
 
+### Pull Requests
+
+Use conventional commits format for PR titles:
+```
+feat: Add dark mode toggle
+fix: Correct timezone bug
+```
+
+Write a brief description of what the PR does and why. No specific format required.
+
 ---
 
-## When to Read Specific Guides
+## When to Use Skills
 
-**Read the full guide in `AgentUsage/` when you encounter these situations:**
+**This project uses Claude Code Skills for specialized workflows. Invoke skills using the Skill tool when you encounter these situations:**
 
 ### Secrets & API Keys
-- **When managing API keys or secrets** → Read `AgentUsage/secrets_management.md`
-- **Before implementing secrets loading** → Read `AgentUsage/secrets_management.md`
-- **When integrating external APIs** → Read `AgentUsage/api_usage.md`
+- **When managing API keys or secrets** → Use skill: `secrets-management`
+- **Before implementing secrets loading** → Use skill: `secrets-management`
+- **When integrating external APIs** → Use skill: `api-integration`
 
 ### Cloudflare Development
-- **When deploying to Cloudflare** → Read `AgentUsage/cloudflare_guide.md`
-- **Before using Cloudflare Workers, KV, R2, or D1** → Read `AgentUsage/cloudflare_guide.md`
-- **When setting up Cloudflare MCP server** → Read `AgentUsage/cloudflare_guide.md`
+- **When deploying to Cloudflare** → Use skill: `cloudflare-deployment`
+- **Before using Cloudflare Workers, KV, R2, or D1** → Use skill: `cloudflare-deployment`
+- **When setting up Cloudflare MCP server** → Use skill: `cloudflare-deployment`
 
 ### Package Management
-- **When using UV package manager** → Read `AgentUsage/uv_usage.md`
-- **Before creating pyproject.toml** → Read `AgentUsage/uv_usage.md`
-- **When managing Python dependencies** → Read `AgentUsage/uv_usage.md`
+- **When using UV package manager** → Use skill: `uv-package-manager`
+- **Before creating pyproject.toml** → Use skill: `uv-package-manager`
+- **When managing Python dependencies** → Use skill: `uv-package-manager`
+
+### Authentication
+- **When adding sign-in to a Grove app** → Use skill: `heartwood-auth`
+- **When protecting admin routes** → Use skill: `heartwood-auth`
+- **When validating user sessions** → Use skill: `heartwood-auth`
+- **When integrating with Heartwood (GroveAuth)** → Use skill: `heartwood-auth`
 
 ### Version Control
-- **Before making a git commit** → Read `AgentUsage/git_guide.md`
-- **When initializing a new repo** → Read `AgentUsage/git_guide.md`
-- **For git workflow and branching** → Read `AgentUsage/git_guide.md`
-- **For conventional commits reference** → Read `AgentUsage/git_guide.md`
+- **Before making a git commit** → Use skill: `git-workflows`
+- **Before creating a pull request** → Use skill: `git-workflows`
+- **When initializing a new repo** → Use skill: `git-workflows`
+- **For git workflow and branching** → Use skill: `git-workflows`
+- **When setting up git hooks** → Use skill: `git-hooks`
 
 ### Database Management
-- **When working with databases** → Read `AgentUsage/db_usage.md`
-- **Before implementing data persistence** → Read `AgentUsage/db_usage.md`
-- **For database.py template** → Read `AgentUsage/db_usage.md`
+- **When working with databases** → Use skill: `database-management`
+- **Before implementing data persistence** → Use skill: `database-management`
+- **For database.py template** → Use skill: `database-management`
 
-### Search & Research
-- **When searching across 20+ files** → Read `AgentUsage/house_agents.md`
-- **When finding patterns in codebase** → Read `AgentUsage/house_agents.md`
-- **When locating TODOs/FIXMEs** → Read `AgentUsage/house_agents.md`
+### Research & Analysis
+- **When researching technology decisions** → Use skill: `research-strategy`
+- **When analyzing unfamiliar codebases** → Use skill: `research-strategy`
+- **For systematic investigation** → Use skill: `research-strategy`
 
 ### Testing
-- **Before writing Python tests** → Read `AgentUsage/testing_python.md`
-- **Before writing JavaScript/TypeScript tests** → Read `AgentUsage/testing_javascript.md`
-- **Before writing Go tests** → Read `AgentUsage/testing_go.md`
-- **Before writing Rust tests** → Read `AgentUsage/testing_rust.md`
-
+- **When deciding what to test or reviewing test quality** → Use skill: `grove-testing`
+- **Before writing Python tests** → Use skill: `python-testing`
+- **Before writing JavaScript/TypeScript tests** → Use skill: `javascript-testing`
+- **Before writing Go tests** → Use skill: `go-testing`
+- **Before writing Rust tests** → Use skill: `rust-testing`
 
 ### Code Quality
-- **When refactoring code** → Read `AgentUsage/code_style_guide.md`
-- **Before major code changes** → Read `AgentUsage/code_style_guide.md`
-- **For style guidelines** → Read `AgentUsage/code_style_guide.md`
+- **When formatting or linting code** → Use skill: `code-quality`
+- **Before major code changes** → Use skill: `code-quality`
+- **For Black, Ruff, mypy usage** → Use skill: `code-quality`
 
-### Project Setup
-- **When starting a new project** → Read `AgentUsage/project_setup.md`
-- **For directory structure** → Read `AgentUsage/project_setup.md`
-- **Setting up CI/CD** → Read `AgentUsage/project_setup.md`
+### Project Setup & Infrastructure
+- **When starting a new project** → Use skill: `project-scaffolding`
+- **Setting up CI/CD pipelines** → Use skill: `cicd-automation`
+- **When containerizing applications** → Use skill: `docker-workflows`
+
+### Web Development
+- **When building Svelte 5 applications** → Use skill: `svelte5-development`
+- **For SvelteKit routing and forms** → Use skill: `svelte5-development`
+
+### CLI Development
+- **When building terminal interfaces** → Use skill: `rich-terminal-output`
+- **For Rich library patterns** → Use skill: `rich-terminal-output`
+
+### Grove UI Design
+- **When creating or enhancing Grove pages** → Use skill: `grove-ui-design`
+- **When adding decorative nature elements** → Use skill: `grove-ui-design`
+- **When implementing glassmorphism effects** → Use skill: `grove-ui-design`
+- **When working with seasonal themes** → Use skill: `grove-ui-design`
+- **When building navigation patterns** → Use skill: `grove-ui-design`
+
+### Grove Documentation
+- **When writing help center articles** → Use skill: `grove-documentation`
+- **When drafting specs or technical docs** → Use skill: `grove-documentation`
+- **When writing user-facing text** → Use skill: `grove-documentation`
+- **When writing onboarding, tooltips, or error messages** → Use skill: `grove-documentation`
+- **When reviewing docs for voice consistency** → Use skill: `grove-documentation`
+
+### Grove Specifications
+- **When creating new technical specifications** → Use skill: `grove-spec-writing`
+- **When reviewing specs for completeness** → Use skill: `grove-spec-writing`
+- **When standardizing spec formatting** → Use skill: `grove-spec-writing`
+
+### Museum Documentation
+- **When writing documentation meant to be read by Wanderers** → Use skill: `museum-documentation`
+- **When creating "how it works" content for knowledge base** → Use skill: `museum-documentation`
+- **When documenting a codebase or system for curious visitors** → Use skill: `museum-documentation`
+- **When writing elegant, narrative-driven technical explanations** → Use skill: `museum-documentation`
+
+### Grove Naming
+- **When naming a new service or feature** → Use skill: `walking-through-the-grove`
+- **When finding a Grove-themed name** → Use skill: `walking-through-the-grove`
+
+### Package Publishing
+- **When publishing to npm** → Use skill: `npm-publish`
+- **Before npm package releases** → Use skill: `npm-publish`
 
 ---
 
 ## Quick Reference
+
+### How to Use Skills
+Skills are invoked using the Skill tool. When a situation matches a skill trigger:
+1. Invoke the skill by name (e.g., `skill: "secrets-management"`)
+2. The skill will expand with detailed instructions
+3. Follow the skill's guidance for the specific task
 
 ### Security Basics
 - Store API keys in `secrets.json` (NEVER commit)
@@ -155,13 +217,35 @@ docs: Update README
 - Provide `secrets_template.json` for setup
 - Use environment variables as fallbacks
 
-
-### House Agents Quick Trigger
-**When searching 20+ files**, use house-research for:
-- Finding patterns across codebase
-- Searching TODO/FIXME comments
-- Locating API endpoints or functions
-- Documentation searches
+### Available Skills Reference
+| Skill | Purpose |
+|-------|---------|
+| `heartwood-auth` | Heartwood (GroveAuth) integration, sign-in, sessions |
+| `secrets-management` | API keys, credentials, secrets.json |
+| `api-integration` | External REST API integration |
+| `database-management` | SQLite, database.py patterns |
+| `git-workflows` | Commits, branching, conventional commits |
+| `git-hooks` | Pre-commit hooks setup |
+| `uv-package-manager` | Python dependencies with UV |
+| `grove-testing` | Testing philosophy, what/when to test |
+| `python-testing` | pytest, fixtures, mocking |
+| `javascript-testing` | Vitest/Jest testing |
+| `go-testing` | Go testing patterns |
+| `rust-testing` | Cargo test patterns |
+| `code-quality` | Black, Ruff, mypy |
+| `project-scaffolding` | New project setup |
+| `cicd-automation` | GitHub Actions workflows |
+| `docker-workflows` | Containerization |
+| `cloudflare-deployment` | Workers, KV, R2, D1 |
+| `svelte5-development` | Svelte 5 with runes |
+| `rich-terminal-output` | Terminal UI with Rich |
+| `grove-ui-design` | Glassmorphism, seasons, forests, warm UI |
+| `grove-documentation` | Grove voice, help articles, user-facing text |
+| `grove-spec-writing` | Technical specifications with Grove formatting |
+| `museum-documentation` | Elegant, narrative documentation for Wanderers |
+| `walking-through-the-grove` | Finding Grove-themed names for new services |
+| `npm-publish` | npm package publishing workflow |
+| `research-strategy` | Systematic research |
 
 ---
 
@@ -195,11 +279,17 @@ docs: Update README
 
 ---
 
-## Complete Guide Index
-For all detailed guides, workflows, and examples, see:
-**`AgentUsage/README.md`** - Master index of all documentation
+## Additional Resources
+
+### Skills Documentation
+Skills are the primary way to access specialized knowledge. Use the Skill tool to invoke them.
+Skills are located in `.claude/skills/` and provide concise, actionable guidance.
+
+### Extended Documentation
+For in-depth reference beyond what skills provide, see:
+**`AgentUsage/README.md`** - Master index of detailed documentation
 
 ---
 
-*Last updated: 2025-11-28*
-*Model: Claude Sonnet 4.5*
+*Last updated: 2026-01-22*
+*Model: Claude Opus 4.5*
