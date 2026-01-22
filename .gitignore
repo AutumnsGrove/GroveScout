@@ -1,4 +1,6 @@
 node_modules
+*.log
+__pycache__/
 
 # Output
 .output
@@ -31,6 +33,3 @@ secrets_template.json
 .vscode/
 .idea/
 .kilocode/
-
-# Claude
-.claude/
